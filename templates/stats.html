@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <h1 class="card-title">{{ t.stats_title | default('占卜统计') }}</h1>
+
+  <!-- Summary Cards -->
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 24px 0;">
+    <div style="background: var(--bg-deep); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; text-align: center;">
+      <div style="font-size: 32px; font-weight: 700; color: var(--gold); font-family: var(--font-mono);">{{ total }}</div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">{{ t.stats_total | default('总占卜次数') }}</div>
+    </div>
+    <div style="background: var(--bg-deep); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; text-align: center;">
+      <div style="font-size: 32px; font-weight: 700; color: var(--gold); font-family: var(--font-mono);">{{ starred_count }}</div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">{{ t.stats_starred | default('收藏次数') }}</div>
+    </div>
+    <div style="background: var(--bg-deep); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; text-align: center;">
+      <div style="font-size: 32px; font-weight: 700; color: var(--gold); font-family: var(--font-mono);">{{ hex_dist | length }}</div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">{{ t.stats_diff_hex | default('不同卦象') }}</div>
+    </div>
+  </div>
+
+  {% if total == 0 %}
+    <p class="empty">{{ t.stats_empty | default('还没有占卜记录，快去占一卦吧！') }}</p>
+  {% else %}
+
+  <!-- Hexagram Distribution -->
+  <h2 class="section-title">{{ t.stats_hex_dist | default('卦象分布') }}</h2>
+  <div style="margin-bottom: 32px;">
+    {% for code, cnt in hex_dist[:10] %}
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+        <div style="width: 120px; font-size: 13px; color: var(--text-secondary); text-align: right; flex-shrink: 0;">
+          {{ hex_names.get(code, code) }}
+        </div>
+        <div style="flex: 1; height: 24px; background: var(--bg-deep); border-radius: 4px; overflow: hidden; position: relative;">
+          <div style="height: 100%; background: linear-gradient(90deg, var(--gold-soft), var(--gold)); border-radius: 4px; width: {{ (cnt / total * 100) }}%; min-width: 2px; transition: width 0.5s ease;"></div>
+        </div>
+        <div style="width: 40px; font-size: 12px; color: var(--text-muted); font-family: var(--font-mono);">{{ cnt }}</div>
+      </div>
+    {% endfor %}
+    {% if hex_dist | length > 10 %}
+      <div style="font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 8px;">…{{ t.stats_total_diff | default('共') }} {{ hex_dist | length }} {{ t.stats_diff_hex_unit | default('种不同卦象') }}</div>
+    {% endif %}
+  </div>
+
+  <!-- Category Distribution -->
+  {% if cat_dist %}
+  <h2 class="section-title">{{ t.stats_cat_dist | default('问题类型分布') }}</h2>
+  <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 32px;">
+    {% for cat, cnt in cat_dist %}
+      <div style="background: var(--bg-deep); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 20px; text-align: center;">
+        <div style="font-size: 20px; font-weight: 600; color: var(--gold); font-family: var(--font-mono);">{{ cnt }}</div>
+        <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">{{ cat_names.get(cat, cat) }}</div>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Method Distribution -->
+  <h2 class="section-title">{{ t.stats_method_dist | default('起卦方式分布') }}</h2>
+  <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 32px;">
+    {% for method, cnt in method_dist %}
+      <div style="background: var(--bg-deep); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 20px; text-align: center;">
+        <div style="font-size: 20px; font-weight: 600; color: var(--gold); font-family: var(--font-mono);">{{ cnt }}</div>
+        <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">{{ method_names.get(method, method) }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- Recent Activity -->
+  {% if recent %}
+  <h2 class="section-title">{{ t.stats_recent | default('近期活动') }}</h2>
+  <div style="display: flex; gap: 8px; align-items: flex-end; height: 80px; margin-bottom: 16px;">
+    {% set max_cnt = recent | map(attribute=1) | max %}
+    {% for day, cnt in recent %}
+      <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+        <div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">{{ cnt }}</div>
+        <div style="width: 100%; max-width: 40px; background: var(--gold); border-radius: 3px 3px 0 0; height: {{ (cnt / max_cnt * 50) }}px; min-height: 2px;"></div>
+        <div style="font-size: 10px; color: var(--text-muted);">{{ day[-5:] }}</div>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% endif %}
+</section>
+{% endblock %}

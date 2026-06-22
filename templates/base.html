@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#d4a843">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="{{ t.app_title }}">
+  <meta name="description" content="{{ t.seo_description | default('Six Yao Divination - Ancient Chinese I Ching prediction method with 6 languages support') }}">
+  <meta property="og:title" content="{{ t.app_title }}">
+  <meta property="og:description" content="{{ t.seo_description | default('Six Yao Divination - Ancient Chinese I Ching prediction method with 6 languages support') }}">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="{{ url_for('static', filename='gua/0.png', _external=True) }}">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="{{ t.app_title }}">
+  <meta name="twitter:description" content="{{ t.seo_description | default('Six Yao Divination - Ancient Chinese I Ching prediction method') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='gua/0.png') }}">
+  <title>{{ t.app_title }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="top-bar">
+  <a href="{{ url_for('index', lang=lang) }}" class="logo">{{ t.app_title }}</a>
+  <nav class="main-nav">
+    <a href="{{ url_for('index', lang=lang) }}" class="nav-link">{{ t.nav_home }}</a>
+    <a href="{{ url_for('history', lang=lang) }}" class="nav-link">{{ t.nav_history }}</a>
+    <a href="{{ url_for('starred', lang=lang) }}" class="nav-link">{{ t.nav_starred | default('Starred') }}</a>
+    <a href="{{ url_for('gallery', lang=lang) }}" class="nav-link">{{ t.nav_gallery | default('Atlas') }}</a>
+    <a href="{{ url_for('stats', lang=lang) }}" class="nav-link">{{ t.nav_stats | default('Stats') }}</a>
+  </nav>
+  <div class="lang-switch">
+    <button onclick="localStorage.removeItem('sy_lang');window.location.href='/'" title="{{ t.guide_title | default('教程') }}" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:14px;color:var(--text-muted);transition:all 0.2s ease;">?</button>
+    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="{{ t.theme_toggle | default('切换主题') }}" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:14px;color:var(--text-muted);transition:all 0.2s ease;">&#9790;</button>
+    <a href="{{ lang_urls['zh'] }}" class="lang-btn {% if lang == 'zh' %}active{% endif %}">中</a>
+    <a href="{{ lang_urls['ja'] }}" class="lang-btn {% if lang == 'ja' %}active{% endif %}">日</a>
+    <a href="{{ lang_urls['en'] }}" class="lang-btn {% if lang == 'en' %}active{% endif %}">EN</a>
+    <a href="{{ lang_urls['vi'] }}" class="lang-btn {% if lang == 'vi' %}active{% endif %}">VI</a>
+    <a href="{{ lang_urls['ko'] }}" class="lang-btn {% if lang == 'ko' %}active{% endif %}">한</a>
+    <a href="{{ lang_urls['my'] }}" class="lang-btn {% if lang == 'my' %}active{% endif %}">မြန်မာ</a>
+  </div>
+</header>
+
+<main class="page">
+  {% block content %}{% endblock %}
+</main>
+</body>
+<script>
+(function() {
+  var saved = localStorage.getItem('theme') || 'dark';
+  if (saved === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    var btn = document.getElementById('themeToggle');
+    if (btn) btn.innerHTML = '&#9788;';
+  }
+})();
+
+function toggleTheme() {
+  var current = document.documentElement.getAttribute('data-theme');
+  var next = current === 'light' ? null : 'light';
+  if (next) {
+    document.documentElement.setAttribute('data-theme', 'light');
+    localStorage.setItem('theme', 'light');
+    document.getElementById('themeToggle').innerHTML = '&#9788;';
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('theme', 'dark');
+    document.getElementById('themeToggle').innerHTML = '&#9790;';
+  }
+}
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/sw.js').catch(function() {});
+}
+</script>
+</html>

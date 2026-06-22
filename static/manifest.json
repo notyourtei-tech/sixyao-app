@@ -1,0 +1,24 @@
+{
+  "name": "Six Yao Divination",
+  "short_name": "Six Yao",
+  "description": "Ancient Chinese I Ching divination — 6 hexagrams, 5 fortune aspects, 6 languages",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08080c",
+  "theme_color": "#d4a843",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/gua/0.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/gua/0.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "lang": "en",
+  "categories": ["lifestyle", "entertainment"]
+}

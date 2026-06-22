@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <h1 class="card-title">{{ title_override | default(t.history_title) }}</h1>
+
+  {% if rows or request.args.get('q') or time_range %}
+  <form method="get" style="margin-bottom: 16px;">
+    <input type="hidden" name="lang" value="{{ lang }}">
+    <input type="text" name="q" value="{{ request.args.get('q', '') }}" placeholder="{{ t.search_placeholder | default('搜索问题或卦象...') }}" class="text-input" style="max-width:400px; margin-bottom: 10px;">
+    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+      <a href="{{ url_for('history', lang=lang, q=request.args.get('q', '')) }}" class="btn-secondary" style="text-decoration:none; padding:6px 14px; font-size:12px; border-radius:999px; {% if not time_range %}background:var(--gold);color:var(--bg-deep);{% endif %}">{{ t.stats_recent | default('全部') }}</a>
+      <a href="{{ url_for('history', lang=lang, q=request.args.get('q', ''), time='today') }}" class="btn-secondary" style="text-decoration:none; padding:6px 14px; font-size:12px; border-radius:999px; {% if time_range == 'today' %}background:var(--gold);color:var(--bg-deep);{% endif %}">{{ t.history_today | default('今天') }}</a>
+      <a href="{{ url_for('history', lang=lang, q=request.args.get('q', ''), time='week') }}" class="btn-secondary" style="text-decoration:none; padding:6px 14px; font-size:12px; border-radius:999px; {% if time_range == 'week' %}background:var(--gold);color:var(--bg-deep);{% endif %}">{{ t.history_week | default('本周') }}</a>
+      <a href="{{ url_for('history', lang=lang, q=request.args.get('q', ''), time='month') }}" class="btn-secondary" style="text-decoration:none; padding:6px 14px; font-size:12px; border-radius:999px; {% if time_range == 'month' %}background:var(--gold);color:var(--bg-deep);{% endif %}">{{ t.history_month | default('本月') }}</a>
+    </div>
+  </form>
+  {% endif %}
+
+  {% if not rows %}
+    <div style="text-align:center; padding: 48px 0;">
+      <p class="empty">{{ t.history_none }}</p>
+      <a href="{{ url_for('index', lang=lang) }}" class="btn-primary" style="text-decoration:none; margin-top:16px; display:inline-block;">{{ t.btn_start | default('开始占卜') }}</a>
+    </div>
+  {% else %}
+    <table class="history-table">
+      <thead>
+      <tr>
+        <th>{{ t.history_id }}</th>
+        <th>{{ t.history_method }}</th>
+        <th>{{ t.history_question }}</th>
+        <th>{{ t.history_hex }}</th>
+        <th>{{ t.history_time }}</th>
+      </tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+        <tr onclick="location.href='{{ url_for('view', hid=r[0], lang=lang) }}'">
+          <td>{{ '%04d' % r[0] }}</td>
+          <td>
+            {% if r[1] == 'coin' %}{{ t.method_name_coin }}
+            {% elif r[1] == 'time' %}{{ t.method_name_time }}
+            {% elif r[1] == 'number' %}{{ t.method_name_number }}
+            {% else %}{{ r[1] }}{% endif %}
+          </td>
+          <td>{{ r[2] | e or '-' }}</td>
+          <td>{{ hex_names.get(r[3], r[3] + 1) }}</td>
+          <td>{{ r[4] }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</section>
+{% endblock %}

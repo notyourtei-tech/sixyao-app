@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <h1 class="card-title">{{ t.nav_gallery | default('卦象图谱') }}</h1>
+  <p class="summary">{{ t.gallery_desc | default('六十四卦完整图谱 — 点击任意一卦进行占卜') }}</p>
+
+  <div class="gallery-grid">
+    {% for h in hex_list %}
+      <a href="{{ url_for('random_hex', lang=lang) }}" class="gallery-item">
+        <img src="{{ url_for('static', filename='gua/' ~ h.code ~ '.png') }}" alt="{{ h.name.zh }}" loading="lazy">
+        <div class="hex-num">{{ '%02d' % h.no }}</div>
+        <div class="hex-name">{{ h.name[lang] }}</div>
+        <div class="hex-meaning">{{ h.meaning[lang][:20] }}{% if h.meaning[lang]|length > 20 %}…{% endif %}</div>
+      </a>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

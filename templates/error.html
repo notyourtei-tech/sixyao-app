@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card" style="text-align: center; padding: 80px 44px;">
+  <div style="font-size: 72px; font-weight: 700; color: var(--gold); opacity: 0.15; font-family: var(--font-mono); margin-bottom: 16px;">{{ code }}</div>
+  <h1 class="card-title" style="margin-bottom: 12px;">{{ message }}</h1>
+  <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 32px;">
+    {% if code == 404 %}
+      {{ t.nav_home | default('返回首页') }}
+    {% elif code == 403 %}
+      {{ t.nav_home | default('返回首页') }}
+    {% else %}
+      {{ t.nav_home | default('返回首页') }}
+    {% endif %}
+  </p>
+  <a href="{{ url_for('index', lang=lang) }}" class="btn-primary" style="text-decoration: none;">
+    {{ t.nav_home | default('返回首页') }}
+  </a>
+</section>
+{% endblock %}

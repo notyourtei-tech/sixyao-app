@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <h1 class="card-title">{{ t.result_title }}</h1>
+
+  <p class="sub-info">
+    {{ t.hex_title_prefix }}{{ hex_no }}{{ t.hex_title_suffix }}
+    {% if question %}
+      &middot; {{ question }}
+    {% endif %}
+  </p>
+
+  <p class="summary">{{ t.summary_notice }}</p>
+
+  <!-- Duplicate Warning -->
+  {% if dup_warning %}
+  <div style="padding: 12px 16px; margin-bottom: 20px; background: rgba(255,180,50,0.08); border: 1px solid rgba(255,180,50,0.2); border-radius: 8px; font-size: 13px; color: #e8a030;">
+    ⚠ {{ dup_warning }}
+  </div>
+  {% endif %}
+
+  <!-- Concise Summary (断语) -->
+  {% if summary_text %}
+  <div style="text-align:center; padding: 16px 20px; margin: 0 0 24px; background: linear-gradient(135deg, rgba(212,168,67,0.06), rgba(212,168,67,0.02)); border: 1px solid var(--border); border-radius: var(--radius-md);">
+    <div style="font-family: var(--font-serif); font-size: 15px; color: var(--gold); line-height: 1.8; letter-spacing: 0.02em;">
+      {{ summary_text }}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Star button -->
+  <div style="text-align:center;margin-bottom:20px;">
+    <form method="post" action="{{ url_for('star', hid=hid) }}" style="display:inline;">
+      <input type="hidden" name="lang" value="{{ lang }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn-secondary" style="font-size:18px;padding:8px 24px;">
+        {% if starred %}&#9733; {{ t.btn_unstar | default('取消收藏') }}{% else %}&#9734; {{ t.btn_star | default('收藏') }}{% endif %}
+      </button>
+    </form>
+  </div>
+
+  <!-- Back to home + Quick cast again -->
+  <div style="text-align:center;margin-bottom:20px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">
+    <a href="{{ url_for('index', lang=lang) }}" class="btn-primary" style="text-decoration:none;padding:10px 28px;border-radius:999px;font-size:13px;font-weight:600;">{{ t.btn_start | default('Start') }}</a>
+    <a href="{{ url_for('random_hex', lang=lang) }}" class="btn-secondary" style="text-decoration:none;padding:10px 24px;border-radius:999px;font-size:13px;font-weight:500;">{{ t.btn_random | default('Quick Cast') }}</a>
+  </div>
+
+  <!-- ===== Original Hexagram ===== -->
+  <div class="hex-section">
+    <h2 class="section-title">{{ t.original_hex | default('本卦') }}
+      <span class="hex-name-inline">{{ hex_name[lang] }} &middot; {{ hex_meaning[lang] }}</span>
+    </h2>
+
+    <div class="hex-display">
+      <div class="hex-visual">
+        <div class="gua-wrapper">
+          <div class="gua-box">
+            {% for i in range(5, -1, -1) %}
+              <div class="gua-line">
+                <div class="line-inner {% if lines[i] == 1 %}yang{% else %}yin{% endif %}"></div>
+                <span class="liuchin-tag">{{ liuchin[i] }}</span>
+                {% if (i+1) in moving %}
+                  <span class="moving-mark">&#10023;</span>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="hex-image-wrapper">
+          <img class="hex-image"
+               src="{{ url_for('static', filename='gua/' ~ (hex_no - 1) ~ '.png') }}"
+               alt="Hexagram {{ hex_no }}">
+        </div>
+      </div>
+
+      <div class="hex-info" style="flex: 1; min-width: 0;">
+        {% if hex_interp and hex_interp.overall %}
+          <p class="hex-interpretation">{{ hex_interp.overall.desc[lang] }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Changed Hexagram ===== -->
+  {% if moving %}
+  <div class="hex-section hex-section-changed">
+    <h2 class="section-title">{{ t.changed_hex | default('变卦') }}
+      <span class="hex-name-inline">{{ changed_name[lang] }} &middot; {{ changed_meaning[lang] }}</span>
+    </h2>
+
+    <div class="hex-display">
+      <div class="hex-visual">
+        <div class="gua-wrapper">
+          <div class="gua-box gua-box-changed">
+            {% for i in range(5, -1, -1) %}
+              <div class="gua-line">
+                <div class="line-inner {% if changed_lines[i] == 1 %}yang{% else %}yin{% endif %}"></div>
+                <span class="liuchin-tag">{{ liuchin[i] }}</span>
+                {% if (i+1) in moving %}
+                  <span class="moving-mark">&#10023;</span>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="hex-image-wrapper">
+          <img class="hex-image"
+               src="{{ url_for('static', filename='gua/' ~ (changed_no - 1) ~ '.png') }}"
+               alt="Hexagram {{ changed_no }}">
+        </div>
+      </div>
+
+      <div class="hex-info" style="flex: 1; min-width: 0;">
+        {% if changed_interp and changed_interp.overall %}
+          <p class="hex-interpretation">{{ changed_interp.overall.desc[lang] }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ===== Moving Lines Analysis ===== -->
+  {% if moving_analysis.has_moving %}
+  <div class="luck-block" style="background: rgba(212,168,67,0.05); border-left: 3px solid var(--gold); padding: 20px; margin: 20px 0; border-radius: 8px;">
+    <h3 class="luck-title" style="color: var(--gold);">{{ t.moving_title | default('动爻分析') }}</h3>
+    <p style="margin-bottom: 12px; color: var(--text-secondary);">{{ moving_analysis.summary }}</p>
+    {% for d in moving_analysis.details %}
+      <div style="margin-bottom: 10px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 6px;">
+        <strong style="color: var(--gold);">{{ d.name }}</strong>
+        <span style="color: var(--text-muted); font-size: 13px;">（{{ d.kin }} · {{ d.direction }}）</span>
+        <p style="margin: 4px 0 0; font-size: 14px; color: var(--text-secondary);">{{ d.meaning }}</p>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- ===== Trend Analysis ===== -->
+  {% if moving %}
+  <div class="trend-card">
+    <h3 class="trend-title">{{ t.trend_title | default('变卦趋势') }}</h3>
+    <p>{{ trend_analysis[lang] }}</p>
+  </div>
+  {% endif %}
+
+  <!-- ===== Fortune Comparison (本卦→变卦) ===== -->
+  {% if fortune_comparison and fortune_comparison[lang] %}
+  <div class="luck-block" style="background: rgba(180,130,255,0.05); border-left: 3px solid #b482ff; padding: 20px; margin: 20px 0; border-radius: 8px;">
+    <h3 class="luck-title" style="color: #b482ff;">{{ t.original_hex | default('本卦') }} → {{ t.changed_hex | default('变卦') }}</h3>
+    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 12px;">{{ t.comparison_desc | default('各运势从本卦到变卦的变化：') }}</p>
+    {% for item in fortune_comparison[lang] %}
+      <div style="margin-bottom: 12px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 6px;">
+        <div style="font-weight: 600; color: #b482ff; margin-bottom: 4px;">{{ item.name }}</div>
+        <div style="font-size: 13px; color: var(--text-secondary);">
+          <span style="color: var(--text-muted);">{{ t.label_original | default('本卦：') }}</span>{{ item.from_text }}
+        </div>
+        <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">
+          <span style="color: #b482ff;">{{ t.label_changed | default('变卦：') }}</span>{{ item.to_text }}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- ===== Five Fortune Analysis ===== -->
+  <h2 class="section-title">{{ t.five_luck }}</h2>
+
+  {% for key, block in analysis.items() %}
+    <div class="luck-block">
+      <h3 class="luck-title">{{ block.title[lang] }}</h3>
+      {% if block.future[lang] or block.advice[lang] %}
+        <p><strong>{{ t.now }}</strong> {{ block.now[lang] }}</p>
+        {% if block.future[lang] %}
+          <p><strong>{{ t.future }}</strong> {{ block.future[lang] }}</p>
+        {% endif %}
+        {% if block.advice[lang] %}
+          <p><strong>{{ t.advice }}</strong> {{ block.advice[lang] }}</p>
+        {% endif %}
+      {% else %}
+        <p>{{ block.now[lang] }}</p>
+      {% endif %}
+    </div>
+  {% endfor %}
+
+  <!-- Glossary for technical terms -->
+  {% if glossary %}
+  <div style="margin-top: 24px; padding: 16px 20px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: var(--radius-md);">
+    <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 10px;">{{ t.glossary_title | default('术语解释 / Glossary') }}</div>
+    {% for term, explanation in glossary.items() %}
+      <div style="margin-bottom: 6px; font-size: 12.5px; line-height: 1.6;">
+        <span style="color: var(--gold); font-weight: 500;">{{ term }}</span>
+        <span style="color: var(--text-muted);"> — </span>
+        <span style="color: var(--text-secondary);">{{ explanation }}</span>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Share Section -->
+  <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border); text-align: center;">
+    <h3 style="font-family: var(--font-serif); font-size: 14px; color: var(--text-muted); margin-bottom: 12px;">{{ t.share_title | default('分享结果') }}</h3>
+    <div class="share-group">
+      <a class="share-btn" href="https://twitter.com/intent/tweet?url={{ url_for('view', hid=hid, lang=lang, _external=True) }}&text={{ hex_name[lang] | e }} - {{ t.result_title | e }}" target="_blank" rel="noopener">
+        <span class="share-icon">&#120143;</span> Twitter
+      </a>
+      <a class="share-btn" href="https://api.whatsapp.com/send?text={{ hex_name[lang] | e }} {{ t.result_title | e }} {{ url_for('view', hid=hid, lang=lang, _external=True) }}" target="_blank" rel="noopener">
+        <span class="share-icon">&#128172;</span> WhatsApp
+      </a>
+      <a class="share-btn" href="https://line.me/R/msg/text/?{{ hex_name[lang] | e }} {{ t.result_title | e }} {{ url_for('view', hid=hid, lang=lang, _external=True) }}" target="_blank" rel="noopener">
+        <span class="share-icon">&#128172;</span> LINE
+      </a>
+      <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u={{ url_for('view', hid=hid, lang=lang, _external=True) }}" target="_blank" rel="noopener">
+        <span class="share-icon">f</span> Facebook
+      </a>
+      <button class="share-btn" onclick="copyShareText()">
+        <span class="share-icon">&#128203;</span> {{ t.btn_copy_share | default('复制分享文案') }}
+      </button>
+      <button class="share-btn" onclick="copyLink()">
+        <span class="share-icon">&#128279;</span> {{ t.btn_copy_link | default('复制链接') }}
+      </button>
+      <button class="share-btn" onclick="generateImage()">
+        <span class="share-icon">&#128247;</span> {{ t.btn_save_image | default('保存图片') }}
+      </button>
+    </div>
+    <div id="sharePreview" style="display:none; margin-top: 12px; padding: 12px 16px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; color: var(--text-secondary); text-align: left; line-height: 1.6;"></div>
+  </div>
+
+</section>
+
+<script>
+var shareText = '{{ hex_name[lang] | e }} · {{ t.result_title | e }}\n{% if question %}{{ t.question_label | default("Question") }}: {{ question | e }}\n{% endif %}{{ t.share_hint | default("For reference only. Details:") }} ' + window.location.href;
+
+function copyShareText() {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(shareText).then(function() { showShareDone(); });
+  } else {
+    var t = document.createElement('textarea');
+    t.value = shareText; document.body.appendChild(t); t.select(); document.execCommand('copy');
+    document.body.removeChild(t); showShareDone();
+  }
+}
+
+function copyLink() {
+  var url = window.location.href;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(function() { showLinkDone(); });
+  } else {
+    var t = document.createElement('textarea');
+    t.value = url; document.body.appendChild(t); t.select(); document.execCommand('copy');
+    document.body.removeChild(t); showLinkDone();
+  }
+}
+
+function showShareDone() {
+  var preview = document.getElementById('sharePreview');
+  preview.style.display = 'block';
+  preview.textContent = '{{ t.copied_share | default("✓ 分享文案已复制到剪贴板") }}';
+  setTimeout(function() { preview.style.display = 'none'; }, 2000);
+}
+
+function showLinkDone() {
+  var preview = document.getElementById('sharePreview');
+  preview.style.display = 'block';
+  preview.textContent = '{{ t.copied_link | default("✓ 链接已复制到剪贴板") }}';
+  setTimeout(function() { preview.style.display = 'none'; }, 2000);
+}
+
+function generateImage() {
+  var canvas = document.createElement('canvas');
+  canvas.width = 750;
+  canvas.height = 1100;
+  var ctx = canvas.getContext('2d');
+
+  // Background
+  ctx.fillStyle = '#0e0e14';
+  ctx.fillRect(0, 0, 750, 1100);
+
+  // Gold border
+  ctx.strokeStyle = '#d4a843';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(20, 20, 710, 1060);
+
+  // Title
+  ctx.fillStyle = '#d4a843';
+  ctx.font = 'bold 36px serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('{{ hex_name[lang] }}', 375, 80);
+
+  ctx.font = '18px sans-serif';
+  ctx.fillStyle = '#9a9080';
+  ctx.fillText('{{ t.hex_prefix | e }}{{ hex_no }}{{ t.hex_suffix | e }} · {{ t.result_title }}', 375, 115);
+
+  // Question
+  {% if question %}
+  ctx.font = '16px sans-serif';
+  ctx.fillStyle = '#5e564a';
+  ctx.fillText('{{ t.question_label | default("Question") }}: {{ question | e }}', 375, 150);
+  {% endif %}
+
+  // Divider
+  ctx.strokeStyle = 'rgba(212,168,67,0.3)';
+  ctx.beginPath();
+  ctx.moveTo(100, 175);
+  ctx.lineTo(650, 175);
+  ctx.stroke();
+
+  // Summary
+  ctx.font = '15px sans-serif';
+  ctx.fillStyle = '#d4a843';
+  ctx.textAlign = 'center';
+  var summary = '{{ summary_text | e }}';
+  wrapText(ctx, summary, 375, 210, 600, 22);
+
+  // Five fortunes
+  var y = 320;
+  var aspects = {{ analysis.keys() | list | tojson }};
+  var titles = {
+    {% for key, block in analysis.items() %}
+    '{{ key }}': '{{ block.title[lang] | e }}',
+    {% endfor %}
+  };
+  var nowTexts = {
+    {% for key, block in analysis.items() %}
+    '{{ key }}': '{{ block.now[lang][:80] | e }}',
+    {% endfor %}
+  };
+
+  for (var i = 0; i < aspects.length && y < 950; i++) {
+    var asp = aspects[i];
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#d4a843';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText(titles[asp] || asp, 60, y);
+    y += 24;
+
+    ctx.fillStyle = '#9a9080';
+    ctx.font = '14px sans-serif';
+    wrapTextLeft(ctx, nowTexts[asp] || '', 60, y, 630, 20);
+    y += Math.ceil((nowTexts[asp] || '').length / 40) * 20 + 20;
+  }
+
+  // Footer
+  ctx.fillStyle = '#5e564a';
+  ctx.font = '12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('{{ t.app_title }} · {{ t.summary_notice | e }}', 375, 1060);
+
+  // Download
+  var link = document.createElement('a');
+  link.download = 'sixyao_{{ hex_no }}.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+
+  var preview = document.getElementById('sharePreview');
+  preview.style.display = 'block';
+  preview.textContent = '✓ {{ t.image_saved | default("图片已保存") }}';
+  setTimeout(function() { preview.style.display = 'none'; }, 2000);
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  var chars = text.split('');
+  var line = '';
+  var ly = y;
+  for (var i = 0; i < chars.length; i++) {
+    var test = line + chars[i];
+    if (ctx.measureText(test).width > maxWidth && line) {
+      ctx.fillText(line, x, ly);
+      line = chars[i];
+      ly += lineHeight;
+    } else {
+      line = test;
+    }
+  }
+  ctx.fillText(line, x, ly);
+}
+
+function wrapTextLeft(ctx, text, x, y, maxWidth, lineHeight) {
+  ctx.textAlign = 'left';
+  var words = text.split('');
+  var line = '';
+  var ly = y;
+  for (var i = 0; i < words.length; i++) {
+    var test = line + words[i];
+    if (ctx.measureText(test).width > maxWidth && line) {
+      ctx.fillText(line, x, ly);
+      line = words[i];
+      ly += lineHeight;
+    } else {
+      line = test;
+    }
+  }
+  ctx.fillText(line, x, ly);
+}
+</script>
+<canvas id="shareCanvas" style="display:none;"></canvas>
+{% endblock %}

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#d4a843">
+  <title>Six Yao Divination</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: var(--bg-deep, #0e0e14);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-sans, sans-serif);
+      overflow: hidden;
+    }
+
+    .welcome-overlay {
+      position: fixed; inset: 0;
+      background: var(--bg-deep, #0e0e14);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+      opacity: 1; transition: opacity 0.4s ease;
+    }
+    .welcome-overlay.hidden { opacity: 0; pointer-events: none; }
+
+    .welcome-card {
+      width: 100%; max-width: 520px;
+      background: var(--bg-surface, #1a1a24);
+      border: 1px solid var(--border, #2a2a3a);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+    }
+
+    .wc-header {
+      text-align: center;
+      padding: 40px 32px 28px;
+      background: linear-gradient(180deg, rgba(212,168,67,0.08) 0%, transparent 100%);
+    }
+    .wc-icon { font-size: 56px; margin-bottom: 12px; opacity: 0.12; color: var(--gold, #d4a843); }
+    .wc-title {
+      font-family: var(--font-serif, serif);
+      font-size: 26px; font-weight: 700;
+      color: var(--text-primary, #e8e0d0);
+      margin-bottom: 6px;
+    }
+    .wc-sub { font-size: 13px; color: var(--text-muted, #706a5c); }
+
+    .wc-body { padding: 0 32px 32px; }
+
+    /* Step panels */
+    .panel { display: none; }
+    .panel.active { display: block; animation: fadeUp 0.35s ease; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Language grid */
+    .lang-label {
+      font-size: 12px; font-weight: 600; color: var(--text-muted, #706a5c);
+      letter-spacing: 0.08em; text-transform: uppercase;
+      text-align: center; margin-bottom: 16px;
+    }
+    .lang-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .lang-btn {
+      padding: 14px 12px;
+      border: 1px solid var(--border, #2a2a3a);
+      border-radius: 10px;
+      background: var(--bg-deep, #0e0e14);
+      cursor: pointer; text-align: center;
+      transition: all 0.2s ease;
+      color: var(--text-secondary, #a09888);
+    }
+    .lang-btn:hover {
+      border-color: var(--gold, #d4a843);
+      background: rgba(212,168,67,0.06);
+      transform: translateY(-1px);
+    }
+    .lang-flag { font-size: 28px; display: block; margin-bottom: 4px; }
+    .lang-name { font-size: 13px; font-weight: 500; }
+    .lang-native { font-size: 11px; color: var(--text-muted, #706a5c); margin-top: 2px; }
+
+    /* Guide steps */
+    .dots { display: flex; justify-content: center; gap: 6px; margin-bottom: 24px; }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--border, #2a2a3a);
+      transition: all 0.3s ease;
+    }
+    .dot.on { background: var(--gold, #d4a843); width: 22px; border-radius: 4px; }
+
+    .step-num {
+      font-family: var(--font-mono, monospace);
+      font-size: 11px; color: var(--gold, #d4a843);
+      letter-spacing: 0.1em; text-align: center; margin-bottom: 10px;
+    }
+    .step-title {
+      font-family: var(--font-serif, serif);
+      font-size: 20px; font-weight: 600;
+      color: var(--text-primary, #e8e0d0);
+      text-align: center; margin-bottom: 14px;
+    }
+    .step-desc {
+      font-size: 13.5px; color: var(--text-secondary, #a09888);
+      line-height: 1.85; white-space: pre-line;
+      text-align: center;
+    }
+
+    .btns { display: flex; justify-content: center; gap: 10px; margin-top: 28px; }
+    .b-prev {
+      padding: 10px 22px; border-radius: 999px;
+      border: 1px solid var(--border, #2a2a3a);
+      background: transparent; color: var(--text-secondary, #a09888);
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .b-prev:hover { border-color: var(--text-muted); color: var(--text-primary); }
+    .b-next {
+      padding: 10px 28px; border-radius: 999px;
+      border: none; background: var(--gold, #d4a843);
+      color: var(--bg-deep, #0e0e14);
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .b-next:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(212,168,67,0.3); }
+
+    .skip {
+      display: block; text-align: center;
+      margin-top: 14px; font-size: 12px;
+      color: var(--text-muted, #706a5c);
+      text-decoration: none; cursor: pointer;
+      transition: color 0.2s ease; border: none; background: none;
+    }
+    .skip:hover { color: var(--text-secondary); }
+
+    @media (max-width: 520px) {
+      .wc-body { padding: 0 20px 24px; }
+      .lang-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+      .lang-btn { padding: 12px 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="welcome-overlay" id="wo">
+    <div class="welcome-card">
+      <div class="wc-header">
+        <div class="wc-icon">&#x2642;</div>
+        <h1 class="wc-title" id="wcTitle">Welcome</h1>
+        <p class="wc-sub">I Ching &middot; Six Yao Divination</p>
+      </div>
+      <div class="wc-body">
+
+        <!-- Panel 1: Language Selection -->
+        <div class="panel active" id="p1">
+          <div class="lang-label" id="langLabel">Choose your language</div>
+          <div class="lang-grid">
+            <button class="lang-btn" onclick="pickLang('zh')">
+              <span class="lang-flag">&#x1F1E8;&#x1F1F3;</span>
+              <span class="lang-name">Chinese</span>
+              <span class="lang-native">中文</span>
+            </button>
+            <button class="lang-btn" onclick="pickLang('ja')">
+              <span class="lang-flag">&#x1F1EF;&#x1F1F5;</span>
+              <span class="lang-name">Japanese</span>
+              <span class="lang-native">日本語</span>
+            </button>
+            <button class="lang-btn" onclick="pickLang('en')">
+              <span class="lang-flag">&#x1F1FA;&#x1F1F8;</span>
+              <span class="lang-name">English</span>
+              <span class="lang-native">English</span>
+            </button>
+            <button class="lang-btn" onclick="pickLang('vi')">
+              <span class="lang-flag">&#x1F1FB;&#x1F1F3;</span>
+              <span class="lang-name">Vietnamese</span>
+              <span class="lang-native">Tiếng Việt</span>
+            </button>
+            <button class="lang-btn" onclick="pickLang('ko')">
+              <span class="lang-flag">&#x1F1F0;&#x1F1F7;</span>
+              <span class="lang-name">Korean</span>
+              <span class="lang-native">한국어</span>
+            </button>
+            <button class="lang-btn" onclick="pickLang('my')">
+              <span class="lang-flag">&#x1F1F2;&#x1F1F2;</span>
+              <span class="lang-name">Myanmar</span>
+              <span class="lang-native">မြန်မာ</span>
+            </button>
+          </div>
+          <button class="skip" onclick="skipAll()" id="skipLang">Skip — use English</button>
+        </div>
+
+        <!-- Panel 2: Guide Steps -->
+        <div class="panel" id="p2">
+          <div class="dots">
+            <div class="dot on" id="d1"></div>
+            <div class="dot" id="d2"></div>
+            <div class="dot" id="d3"></div>
+          </div>
+          <div class="step-num" id="sNum">STEP 1</div>
+          <h2 class="step-title" id="sTitle"></h2>
+          <p class="step-desc" id="sDesc"></p>
+          <div class="btns">
+            <button class="b-prev" id="bPrev" onclick="prev()" style="visibility:hidden">Back</button>
+            <button class="b-next" id="bNext" onclick="next()">Next</button>
+          </div>
+          <button class="skip" onclick="goMain()" id="skipGuide">Skip tutorial</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+  var G = {
+    zh: { t:"六爻占卜", l:"选择语言",
+      s1t:"这是什么？", s1d:"六爻占卜是中国古老的周易预测方法，已有三千多年历史。通过起卦来了解事物的发展趋势，帮你做出更好的决策。",
+      s2t:"可以做什么？", s2d:"你可以占卜五个方面的运势：\n• 恋爱 / 感情\n• 工作 / 学业\n• 金钱 / 财运\n• 健康\n• 人际 / 出行\n\n每个方面都会给你当前状态的分析和未来走向的预测。",
+      s3t:"怎么用？", s3d:"第一步：选择起卦方式\n• 摇卦 — 模拟传统铜钱法\n• 时间起卦 — 用当前时间自动起卦\n• 数字起卦 — 输入一个数字\n\n第二步：写下你心中想问的问题（也可以留空）\n\n第三步：点击「开始占卜」\n\n系统会自动为你生成卦象并详细解读。",
+      btn:"开始使用", skip:"跳过教程" },
+    ja: { t:"六爻占い", l:"言語を選択",
+      s1t:"これは何？", s1d:"六爻占いは中国の古代からの周易予測法で、3000年以上の歴史があります。卦を起こすことで物事の発展傾向を知り、より良い判断を助けます。",
+      s2t:"何が出来る？", s2d:"5つの運勢を占えます：\n• 恋愛 / 感情\n• 仕事 / 学業\n• 金運 / 財運\n• 健康\n• 人間関係\n\n各項目で現在の状態と将来の傾向を分析します。",
+      s3t:"使い方", s3d:"ステップ1：起卦方法を選択\n• 揺卦 — 伝統的なコイン法\n• 時間起卦 — 現在の時刻で自動起卦\n• 数字起卦 — 数字を入力\n\nステップ2：占いたいことを書く（空欄でもOK）\n\nステップ3：「占う」をクリック\n\nシステムが自動で卦を生成し、詳しい解説を表示します。",
+      btn:"始める", skip:"チュートリアルをスキップ" },
+    en: { t:"Six Yao Divination", l:"Choose your language",
+      s1t:"What is it?", s1d:"Six Yao (Liu Yao) divination is an ancient Chinese I Ching prediction method with over 3,000 years of history. By casting hexagrams, you can understand trends and make better decisions.",
+      s2t:"What can you do?", s2d:"Divine five aspects of fortune:\n• Love / Relationship\n• Career / Study\n• Wealth / Money\n• Health\n• People / Travel\n\nEach aspect provides analysis of your current state and predictions for the future.",
+      s3t:"How to use?", s3d:"Step 1: Choose a casting method\n• Coin casting — traditional copper coin method\n• Time-based — auto-cast using current time\n• Number — enter a number to cast\n\nStep 2: Write your question (optional)\n\nStep 3: Click Start\n\nThe system will generate your hexagram and provide a detailed reading.",
+      btn:"Get Started", skip:"Skip tutorial" },
+    vi: { t:"Quẻ Lục Hào", l:"Chọn ngôn ngữ",
+      s1t:"Đây là gì?", s1d:"Lục Hào là phương pháp bói Chu Dịch cổ xưa của Trung Quốc, có lịch sử hơn 3.000 năm. Qua việc gieo quẻ, bạn có thể hiểu xu hướng sự việc và đưa ra quyết định tốt hơn.",
+      s2t:"Làm được gì?", s2d:"Bói 5 phương diện vận thế:\n• Tình cảm / Yêu đương\n• Công việc / Học tập\n• Tiền bạc / Tài vận\n• Sức khỏe\n• Quan hệ / Đi lại\n\nMỗi phương diện phân tích trạng thái hiện tại và dự đoán tương lai.",
+      s3t:"Cách dùng", s3d:"Bước 1: Chọn cách gieo quẻ\n• Đồng xu — phương pháp truyền thống\n• Thời gian — gieo tự động theo giờ\n• Số — nhập một con số\n\nBước 2: Viết câu hỏi (có thể bỏ trống)\n\nBước 3: Nhấn Bắt đầu\n\nHệ thống sẽ tạo quẻ và luận giải chi tiết.",
+      btn:"Bắt đầu", skip:"Bỏ qua hướng dẫn" },
+    ko: { t:"육효 점", l:"언어 선택",
+      s1t:"이게 뭔가요?", s1d:"육효 점은 중국의 고대 주역 예측법으로, 3,000년 이상 된 가장 오래된 점술 중 하나입니다. 괘를 통해 사물의 발전 경향을 이해하고 더 나은 결정을 내리는 데 도움을 줍니다.",
+      s2t:"뭘 할 수 있나요?", s2d:"5가지 운세를 점칠 수 있습니다:\n• 연애 / 감정\n• 직업 / 학업\n• 재물 / 금전\n• 건강\n• 인간관계 / 외출\n\n각 항목에서 현재 상태와 미래 방향을 분석합니다.",
+      s3t:"사용법", s3d:"1단계: 점 방법 선택\n• 동전 던지기 — 전통적인 동전법\n• 시간으로 점 보기 — 현재 시간으로 자동\n• 숫자로 점 보기 — 숫자 입력\n\n2단계: 질문 내용 입력 (비워둬도 됩니다)\n\n3단계: 점 보기 클릭\n\n시스템이 자동으로 괘를 생성하고 상세한 해석을 보여줍니다.",
+      btn:"시작하기", skip:"튜토리얼 건너뛰기" },
+    my: { t:"ဆြေရှုရေး", l:"ဘာသာစကား ရွေးပါ",
+      s1t:"ဒါက ဘာလဲ?", s1d:"ဆြေရှုရေးသည် တရုတ်ရိုးရာ အဟောင်းဆုံး နိမိတ်ဖတ်ခြင်းနည်းစနစ်ဖြစ်ပြီး နှစ်ပေါင်း ၃၀၀၀ ကျော် သမိုင်းကြောင်းရှိသည်။ ဗေဒများဖန်တီးခြင်းဖြင့် အရာဝတ္ထုများ၏ ဖွံ့ဖြိုးတိုးတက်မှု လမ်းကြောင်းကို နားလည်ပြီး ပိုကောင်းသည့်ဆုံးဖြတ်ချက်များ ချမှတ်နိုင်ပါသည်။",
+      s2t:"ဘာတွေလုပ်နိုင်လဲ?", s2d:"ကံကြမ္မာ အပိုင်း ၅ ပိုင်းကို နိမိတ်ဖတ်နိုင်ပါသည် —\n• ချစ်ခြင်း / မေတ္တာ\n• အလုပ် / ပညာရေး\n• ငွေကြေး\n• ကျန်းမာရေး\n• လူမှုဆက်ဆံရေး\n\nတစ်ခုတစ်ခုစီသည် လက်ရှိအခြေအနေနှင့် အနာဂတ်ဦးတည်ချက်ကို ခွဲခြမ်းစိတ်ဖြာပေးပါသည်။",
+      s3t:"ဘယ်လိုသုံးရမလဲ?", s3d:"အဆင့် ၁ — နည်းလမ်းရွေးပါ\n• ငွေဒင်းနစ် — ရိုးရာနည်းလမ်း\n• အချိန်ဖြင့် — အလိုအလျောက်\n• ဂဏန်းဖြင့် — ဂဏန်းထည့်ပါ\n\nအဆင့် ၂ — သင့်မေးခွန်းကို ရေးပါ (ချန်ထားနိုင်ပါသည်)\n\nအဆင့် ၃ — စတင်ပါကို နှိပ်ပါ\n\nစနစ်သည် အလိုအလျောက် ဗေဒဖန်တီးပြီး အသေးစိတ်ဖတ်ရှုနိုင်ပါသည်။",
+      btn:"စတင်ရန်", skip:"ကျော်ဖြတ်ရန်" }
+  };
+
+  var sel = null, step = 1, total = 3;
+
+  function pickLang(code) {
+    sel = code;
+    var g = G[code] || G.en;
+    document.getElementById('sTitle').textContent = '';
+    document.getElementById('sDesc').textContent = '';
+    step = 1;
+    showGuide(g);
+  }
+
+  function showGuide(g) {
+    document.getElementById('p1').classList.remove('active');
+    document.getElementById('p2').classList.add('active');
+    document.getElementById('wcTitle').textContent = g.t;
+    document.getElementById('skipGuide').textContent = g.skip;
+    document.getElementById('bNext').textContent = 'Next';
+    updateStep(g);
+  }
+
+  function updateStep(g) {
+    g = g || G[sel] || G.en;
+    var dots = document.querySelectorAll('.dot');
+    dots.forEach(function(d, i) { d.className = 'dot' + (i + 1 === step ? ' on' : ''); });
+    document.getElementById('sNum').textContent = 'STEP ' + step;
+    document.getElementById('sTitle').textContent = g['s' + step + 't'] || '';
+    document.getElementById('sDesc').textContent = g['s' + step + 'd'] || '';
+    document.getElementById('bPrev').style.visibility = step === 1 ? 'hidden' : 'visible';
+
+    var nb = document.getElementById('bNext');
+    if (step === total) {
+      nb.textContent = g.btn;
+      nb.onclick = goMain;
+    } else {
+      nb.textContent = 'Next';
+      nb.onclick = function() { step++; updateStep(g); };
+    }
+  }
+
+  function prev() { if (step > 1) { step--; updateStep(); } }
+  function next() { if (step < total) { step++; updateStep(); } }
+
+  function goMain() {
+    if (!sel) sel = 'en';
+    localStorage.setItem('sy_lang', sel);
+    window.location.href = '/?lang=' + sel;
+  }
+
+  function skipAll() { sel = 'en'; goMain(); }
+
+  (function() {
+    var saved = localStorage.getItem('sy_lang');
+    if (saved && G[saved]) { sel = saved; goMain(); }
+  })();
+  </script>
+</body>
+</html>
