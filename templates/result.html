@@ -240,24 +240,32 @@
 var shareText = '{{ hex_name[lang] | e }} · {{ t.result_title | e }}\n{% if question %}{{ t.question_label }}: {{ question | e }}\n{% endif %}{{ t.share_hint }} ' + window.location.href;
 
 function copyShareText() {
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(shareText).then(function() { showShareDone(); });
+  var text = shareText;
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(function() { showShareDone(); }).catch(function() { fallbackCopy(text); });
   } else {
-    var t = document.createElement('textarea');
-    t.value = shareText; document.body.appendChild(t); t.select(); document.execCommand('copy');
-    document.body.removeChild(t); showShareDone();
+    fallbackCopy(text);
   }
 }
 
 function copyLink() {
   var url = window.location.href;
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(url).then(function() { showLinkDone(); });
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(url).then(function() { showLinkDone(); }).catch(function() { fallbackCopy(url); });
   } else {
-    var t = document.createElement('textarea');
-    t.value = url; document.body.appendChild(t); t.select(); document.execCommand('copy');
-    document.body.removeChild(t); showLinkDone();
+    fallbackCopy(url);
   }
+}
+
+function fallbackCopy(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); showShareDone(); } catch(e) { showShareDone(); }
+  document.body.removeChild(ta);
 }
 
 function showShareDone() {
@@ -365,10 +373,33 @@ function generateImage() {
   ctx.fillText('{{ t.app_title | e }} · {{ t.summary_notice | e }}', 375, 1060);
 
   // Download
-  var link = document.createElement('a');
-  link.download = 'sixyao_{{ hex_no }}.png';
-  link.href = canvas.toDataURL('image/png');
-  link.click();
+  try {
+    var imgData = canvas.toDataURL('image/png');
+    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+      var img = document.createElement('img');
+      img.src = imgData;
+      img.style.maxWidth = '100%';
+      img.style.borderRadius = '8px';
+      var preview = document.getElementById('sharePreview');
+      preview.style.display = 'block';
+      preview.innerHTML = '';
+      preview.appendChild(img);
+      var hint = document.createElement('p');
+      hint.style.cssText = 'margin-top:8px;font-size:12px;color:var(--text-muted);';
+      hint.textContent = '长按图片保存';
+      preview.appendChild(hint);
+    } else {
+      var link = document.createElement('a');
+      link.download = 'sixyao_{{ hex_no }}.png';
+      link.href = imgData;
+      link.click();
+    }
+  } catch(e) {
+    var preview = document.getElementById('sharePreview');
+    preview.style.display = 'block';
+    preview.textContent = '浏览器不支持图片保存';
+  }
 
   var preview = document.getElementById('sharePreview');
   preview.style.display = 'block';

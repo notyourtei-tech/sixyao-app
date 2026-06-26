@@ -2,7 +2,7 @@
    六爻占卜 — 暗金高级感 Premium Dark Gold Theme
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Sans+Myanmar:wght@400;700&family=Noto+Sans:wght@400;500;700&display=swap');
+/* Google Fonts loaded via <link> in base.html for non-blocking */
 
 :root {
   --bg-deep: #0c0a08;
@@ -65,7 +65,7 @@
 
 /* ---- Reset & Base ---- */
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: auto; -webkit-font-smoothing: antialiased; }
+html { scroll-behavior: auto; -webkit-text-size-adjust: 100%; }
 
 body {
   font-family: var(--font-sans);
@@ -73,7 +73,7 @@ body {
   color: var(--text-primary);
   min-height: 100dvh;
   line-height: 1.7;
-  overflow-x: clip;
+  overflow-x: hidden;
 }
 
 ::selection { background: var(--gold); color: var(--bg-deep); }
@@ -195,7 +195,7 @@ body {
   border-radius: var(--radius-md);
   padding: 32px;
   position: relative;
-  overflow: clip;
+  overflow: hidden;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -418,12 +418,18 @@ body {
   opacity: 0;
   transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
   margin-bottom: 0;
+  position: relative;
 }
 
 .form-row-number.visible {
-  max-height: 100px;
+  max-height: 120px;
   opacity: 1;
   margin-bottom: 20px;
+}
+
+.form-row-number .text-input {
+  width: 100%;
+  font-size: 16px;
 }
 
 /* ---- Buttons ---- */
@@ -441,6 +447,11 @@ body {
   transition: all 0.2s ease;
   text-decoration: none;
   letter-spacing: 0.02em;
+}
+
+.btn-primary:active {
+  transform: scale(0.97);
+  background: var(--gold-amber);
 }
 
 .btn-primary:hover {
@@ -497,7 +508,7 @@ body {
 
 .coin-toss-overlay.active {
   opacity: 1;
-  pointer-events: all;
+  pointer-events: none;
 }
 
 .coin-wrap {
@@ -881,9 +892,9 @@ body {
    ============================================================ */
 @media (max-width: 768px) {
   .top-bar {
-    padding: 10px 14px;
+    padding: 8px 12px;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px;
   }
 
   .logo {
@@ -910,24 +921,26 @@ body {
     padding-top: 6px;
     border-top: 1px solid var(--border);
     margin-top: 2px;
+    scroll-snap-type: x proximity;
   }
   .main-nav::-webkit-scrollbar { display: none; }
 
   .nav-link {
     font-size: 11px;
-    padding: 6px 10px;
-    min-height: 32px;
+    padding: 8px 12px;
+    min-height: 36px;
     display: inline-flex;
     align-items: center;
     white-space: nowrap;
     flex-shrink: 0;
+    scroll-snap-align: start;
   }
 
   .lang-switch { gap: 2px; }
   .lang-btn { padding: 6px 8px; font-size: 10px; min-height: 30px; }
 
-  .page { padding: 16px 12px 60px; }
-  .card { padding: 24px 16px 32px; }
+  .page { padding: 12px 10px 60px; }
+  .card { padding: 20px 14px 28px; }
 
   .card-title { font-size: 22px; }
   .hero-title { font-size: 28px; }
@@ -936,7 +949,8 @@ body {
 
   .radio-group { grid-template-columns: 1fr; gap: 8px; }
   .form-row:first-child .radio-group { grid-template-columns: repeat(2, 1fr); }
-  .radio-group label { padding: 12px 14px; font-size: 13px; }
+  .radio-group label { padding: 12px 14px; font-size: 13px; min-height: 44px; }
+  .radio-group label:active { transform: scale(0.98); }
 
   .daily-card {
     flex-direction: column;
@@ -946,7 +960,10 @@ body {
   }
 
   .hex-display { flex-direction: column; gap: 16px; }
-  .gua-box { min-width: unset; width: 100%; }
+  .gua-box { min-width: unset; width: 100%; padding: 12px 14px; }
+  .hex-image-wrapper { width: 100%; }
+  .hex-image { width: 80px; height: 80px; }
+  .hex-info { padding: 0; }
   .line-inner.yang, .line-inner.yin { width: 80px; }
 
   .hex-section-changed {
@@ -967,23 +984,35 @@ body {
   .hex-meaning { font-size: 10px; }
 
   .share-group { gap: 5px; flex-wrap: wrap; justify-content: center; }
-  .share-btn { padding: 5px 10px; font-size: 11px; }
+  .share-btn { padding: 6px 12px; font-size: 11px; min-height: 36px; }
+
+  .summary { padding: 12px 14px; font-size: 13px; }
+  .sub-info { font-size: 12px; }
 
   .stats-grid {
     grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
 
-  .history-table { min-width: 500px; }
+  .history-table { min-width: unset; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .history-table th, .history-table td { padding: 6px 4px; font-size: 11px; }
 
   .tilt-card { transform: none !important; }
+
+  .coin-toss-overlay { display: none !important; }
+
+  button, .btn-primary, .btn-secondary, .share-btn, .radio-group label {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 @media (max-width: 400px) {
   .stats-grid { grid-template-columns: 1fr; }
   .lang-btn { padding: 5px 6px; font-size: 9px; }
-  .nav-link { font-size: 10px; padding: 5px 8px; }
+  .nav-link { font-size: 10px; padding: 6px 8px; min-height: 32px; }
   .hero-title { font-size: 24px; }
   .lang-switch { flex-wrap: wrap; gap: 2px; }
+  .btn-primary { padding: 12px 28px; font-size: 14px; }
+  .radio-group label { min-height: 40px; font-size: 12px; }
 }

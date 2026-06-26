@@ -151,7 +151,10 @@
 
     function playCoinSound() {
       try {
-        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        var ctx = new AC();
+        if (ctx.state === 'suspended') { ctx.resume(); }
         // Metallic ping
         var osc1 = ctx.createOscillator();
         var gain1 = ctx.createGain();
