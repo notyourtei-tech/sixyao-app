@@ -2,16 +2,28 @@ from flask import Flask, render_template, request, redirect, url_for, abort, ses
 import json
 import sqlite3
 from datetime import datetime
+from contextlib import contextmanager
 import random
 import secrets
 import os
+import hmac
+import hashlib
+import logging
 from markupsafe import escape
 from hexinterp import get_hex_name, get_hex_meaning, INTERPRETATIONS, GLOSSARY
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
-DB_PATH = "sixyao2.db"
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logger = logging.getLogger(__name__)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=os.environ.get('FLASK_ENV') == 'production',
+)
+
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sixyao2.db")
 
 LANGS = ["zh", "ja", "en", "vi", "ko", "my"]
 
@@ -27,7 +39,8 @@ app.jinja_env.globals['csrf_token'] = generate_csrf_token
 def csrf_protect():
     if request.method == "POST":
         token = request.form.get('_csrf_token', '')
-        if not token or token != session.get('_csrf_token'):
+        expected = session.get('_csrf_token', '')
+        if not token or not hmac.compare_digest(token, expected):
             abort(403)
 
 # ===== Input Validation =====
@@ -61,8 +74,7 @@ def not_found(e):
     if lang not in LANGS:
         lang = "zh"
     t = TEXTS.get(lang, TEXTS["zh"])
-    msgs = {"zh": "页面未找到", "ja": "ページが見つかりません", "en": "Page Not Found", "vi": "Không tìm thấy trang", "ko": "페이지를 찾을 수 없습니다", "my": "စာမျက်နှာ ရှာမတွေ့ပါ"}
-    return render_template("error.html", lang=lang, t=t, lang_urls=_error_lang_urls(lang), code=404, message=msgs.get(lang, "Page Not Found")), 404
+    return render_template("error.html", lang=lang, t=t, lang_urls=_error_lang_urls(lang), code=404, message=t.get("error_404", "Page Not Found")), 404
 
 @app.errorhandler(403)
 def forbidden(e):
@@ -70,15 +82,13 @@ def forbidden(e):
     if lang not in LANGS:
         lang = "zh"
     t = TEXTS.get(lang, TEXTS["zh"])
-    msgs = {"zh": "禁止访问", "ja": "アクセスが拒否されました", "en": "Access Denied", "vi": "Truy cập bị từ chối", "ko": "접근이 거부되었습니다", "my": "ဝင်ရောက်ခွင့် ငြင်းပိတ်ထားသည်"}
-    return render_template("error.html", lang=lang, t=t, lang_urls=_error_lang_urls(lang), code=403, message=msgs.get(lang, "Access Denied")), 403
+    return render_template("error.html", lang=lang, t=t, lang_urls=_error_lang_urls(lang), code=403, message=t.get("error_403", "Access Denied")), 403
 
 @app.errorhandler(500)
 def server_error(e):
-    lang = "zh"
-    t = TEXTS["zh"]
-    msgs = {"zh": "服务器错误", "ja": "サーバーエラー", "en": "Server Error", "vi": "Lỗi server", "ko": "서버 오류", "my": "ဆာဗာ အမှား"}
-    return render_template("error.html", lang=lang, t=t, lang_urls=_error_lang_urls(lang), code=500, message=msgs.get(lang, "Server Error")), 500
+    lang = get_lang()
+    t = TEXTS.get(lang, TEXTS["zh"])
+    return render_template("error.html", lang=lang, t=t, lang_urls=_error_lang_urls(lang), code=500, message=t.get("error_500", "Server Error")), 500
 
 TEXTS = {
     "zh": {
@@ -182,6 +192,35 @@ TEXTS = {
         "history_today": "今天",
         "history_week": "本周",
         "history_month": "本月",
+        "date_format": "%Y年%m月%d日",
+        "error_404": "页面未找到",
+        "error_403": "禁止访问",
+        "error_500": "服务器错误",
+        "error_record_not_found": "记录未找到",
+        "wechat_title": "请在浏览器中打开",
+        "wechat_desc": "当前在微信/QQ等应用内置浏览器中打开，部分功能可能受限。建议使用系统浏览器访问以获得完整体验。",
+        "wechat_step": "1. 点击右上角 ⋯ 按钮<br>2. 选择 在浏览器中打开",
+        "wechat_btn": "我知道了",
+        "random_question": "随机一卦 · 今日运势",
+        "cat_random": "随机",
+        "trend_zh_from": "从当前卦象「{h}…」到变卦「{c}…」，事态正在从一种状态向另一种状态转变。动爻越多，变化越剧烈。变卦揭示了事物发展的最终走向。",
+        "trend_zh_stable": "当前卦象的核心含义是「{h}…」。变卦与本卦相同或相近，意味着当前状态比较稳定，短期内不会有根本性的变化。",
+        "trend_zh_default": "变卦揭示了事物发展的最终走向。建议结合本卦和变卦综合判断。",
+        "cat_hints": {"love": "感情方面", "career": "事业方面", "wealth": "财运方面", "health": "健康方面", "people": "人际方面", "random": "今日运势", "general": "综合运势"},
+        "moving_hints": "有{n}个动爻，变化较多。",
+        "aspect_names": {"love": "感情", "career": "事业", "wealth": "财运", "health": "健康", "travel": "人际"},
+        "moving_data": {
+            "pos": ["初爻", "二爻", "三爻", "四爻", "五爻", "上爻"],
+            "kin": ["父母", "兄弟", "妻财", "子孙", "官鬼", "父母"],
+            "dir_y": "阳变阴",
+            "dir_n": "阴变阳",
+            "meanings": {1: "事物的萌芽阶段，基础和起始", 2: "内在发展期，个人修养和积累", 3: "过渡阶段，面临抉择和考验", 4: "近君之位，机遇与风险并存", 5: "君位，事业的核心和主导", 6: "事物的极盛或转折点"},
+            "sum_base": "共{n}个动爻",
+            "sum_1": "，事态集中于一个焦点，变化方向明确",
+            "sum_2": "，两种力量交织，需要权衡取舍",
+            "sum_3": "，变化较多，局势复杂，宜静观其变",
+            "sum_4": "，变数极多，当前不宜做重大决定",
+        },
     },
     "ja": {
         "app_title": "六爻占い",
@@ -284,6 +323,33 @@ TEXTS = {
         "history_today": "今日",
         "history_week": "今週",
         "history_month": "今月",
+        "date_format": "%Y年%m月%d日",
+        "error_404": "ページが見つかりません",
+        "error_403": "アクセスが拒否されました",
+        "error_500": "サーバーエラー",
+        "error_record_not_found": "記録が見つかりません",
+        "wechat_title": "ブラウザで開いてください",
+        "wechat_desc": "微信やQQなどのアプリ内ブラウザでは、一部の機能が制限される場合があります。システムブラウザで開くことをお勧めします。",
+        "wechat_step": "1. 右上の ⋯ ボタンをタップ<br>2. ブラウザで開く を選択",
+        "wechat_btn": "了解しました",
+        "random_question": "ラッキー占い · 今日の運勢",
+        "cat_random": "ランダム",
+        "trend_arrow": "{h}… → {c}…",
+        "cat_hints": {"love": "恋愛", "career": "仕事", "wealth": "金運", "health": "健康", "people": "人間関係", "random": "今日の運勢", "general": "総合運勢"},
+        "moving_hints": "動爻{n}個で、変化が多い時期です。",
+        "aspect_names": {"love": "恋愛", "career": "仕事", "wealth": "金運", "health": "健康", "travel": "人間関係"},
+        "moving_data": {
+            "pos": ["初爻", "二爻", "三爻", "四爻", "五爻", "上爻"],
+            "kin": ["父母", "兄弟", "妻財", "子孫", "官鬼", "父母"],
+            "dir_y": "陽→陰",
+            "dir_n": "陰→陽",
+            "meanings": {1: "物事の萌芽段階、基礎と出発点", 2: "内在発展期、個人の修養と蓄積", 3: "移行段階、選択と試練に直面", 4: "君主に近い位置、機会とリスクが共存", 5: "君位、事業の核心と主導", 6: "物事の極盛または転換点"},
+            "sum_base": "動爻{n}個",
+            "sum_1": "、事態は一つの焦点に集中し、変化の方向は明確",
+            "sum_2": "、二つの力が絡み合い、バランスを取る必要あり",
+            "sum_3": "、変化が多く、状況は複雑、静観が吉",
+            "sum_4": "、変動が極めて多く、重大な決定は控えめに",
+        },
     },
     "my": {
         "app_title": "ဆြေရှုရေး",
@@ -386,6 +452,33 @@ TEXTS = {
         "history_today": "ယနေ့",
         "history_week": "ဤအပတ်",
         "history_month": "ဤလ",
+        "date_format": "%Y-%m-%d",
+        "error_404": "စာမျက်နှာ ရှာမတွေ့ပါ",
+        "error_403": "ဝင်ရောက်ခွင့် ငြင်းပိတ်ထားသည်",
+        "error_500": "ဆာဗာ အမှား",
+        "error_record_not_found": "မှတ်တမ်း ရှာမတွေ့ပါ",
+        "wechat_title": "ဘရောင်ဇာဖြင့် ဖွင့်ပါ",
+        "wechat_desc": "WeChat/QQ အက်ပ်အတွင်း ဘရောင်ဇာဖြင့် ဖွင့်ထားပါသည်။ အပြည့်အဝအသုံးပြုရန် စနစ်ဘရောင်ဇာဖြင့် ဖွင့်ပါ။",
+        "wechat_step": "၁။ ညာဘက်အပေါ်ခြမ်းရှိ ⋯ ခလုတ်ကို နှိပ်ပါ<br>၂။ ဘရောင်ဇာဖြင့် ဖွင့်ရန် ကို ရွေးပါ",
+        "wechat_btn": "နားလည်ပါပြီ",
+        "random_question": "မြန်မြန်ဆန်ဆန် · ယနေ့ ကံကြမ္မာ",
+        "cat_random": "များများ",
+        "trend_arrow": "{h}… → {c}…",
+        "cat_hints": {"love": "ချစ်ခြင်း", "career": "အလုပ်", "wealth": "ငွေကြေး", "health": "ကျန်းမာရေး", "people": "လူမှုဆက်ဆံ", "random": "ယနေ့ ကံကြမ္မာ", "general": "အထွေထွေ ကံကြမ္မာ"},
+        "moving_hints": "လှုပ်ရှားသည့်အကြောင်းအရာ {n} ခု — ပြောင်းလဲမှုများ များပြားပါသည်။",
+        "aspect_names": {"love": "ချစ်ခြင်း", "career": "အလုပ်", "wealth": "ငွေကြေး", "health": "ကျန်းမာရေး", "travel": "လူမှုဆက်ဆံ"},
+        "moving_data": {
+            "pos": ["ပထမအကြောင်း", "ဒုတိယအကြောင်း", "တတိယအကြောင်း", "စတုတ္ထအကြောင်း", "ပဉ္စမအကြောင်း", "ဆဋ္ဌမအကြောင်း"],
+            "kin": ["မိဘ", "ညီအစ်ကိုမောင်နှမ", "ဇနီး/ငွေကြေး", "သားသမီး", "အရာရှိ", "မိဘ"],
+            "dir_y": "အမျိုးသား→အမျိုးသမီး",
+            "dir_n": "အမျိုးသမီး→အမျိုးသား",
+            "meanings": {1: "အစပျိုးခြင်းအဆင့် — အခြေခံနှင့် အစပျိုးခြင်း", 2: "အတွင်းပိုင်းဖွံ့ဖြိုးခြင်း — ကိုယ်ကျင့်တရားနှင့် စုဆောင်းခြင်း", 3: "ပြောင်းလဲခြင်းအဆင့် — ဆုံးဖြတ်ချက်များနှင့် စမ်းသပ်မှုများ", 4: "ဘုရင်နှင့် နီးကပ်သည့်နေရာ — အခွင့်အရေးနှင့် အန္တရာယ်", 5: "ဘုရင်နေရာ — အလုပ်၏ အဓိကနှင့် ဦးဆောင်မှု", 6: "အမြင့်ဆုံး သို့မဟုတ် ပြောင်းလဲမှုအမှတ်"},
+            "sum_base": "လှုပ်ရှားသည့်အကြောင်းအရာ {n} ခု",
+            "sum_1": " — အဓိကအာရုံချက်တစ်ခုတည်းတွင် စုပေါင်းပြီး ပြောင်းလဲမှု ဦးတည်ချက်ရှင်းလင်းသည်",
+            "sum_2": " — အင်အားနှစ်ခု ထွေထွေရှုပ်နေပြီး ဟန်ချက်ညီအောင် လုပ်ရန် လိုအပ်သည်",
+            "sum_3": " — ပြောင်းလဲမှုများပြားပြီး အခြေအနေရှုပ်ထွေးသည်၊ ငြိမ်သက်စွာ ကြည့်ရှုရန် သင့်တော်သည်",
+            "sum_4": " — ပြောင်းလဲမှုများ အလွန်များပြားပြီး အရေးကြီးသည့် ဆုံးဖြတ်ချက်များ ချမှတ်ခြင်းမပြုသင့်ပါ",
+        },
     },
     "welcome_texts": {
         "zh": {
@@ -547,6 +640,7 @@ TEXTS = {
         "history_today": "Today",
         "history_week": "This Week",
         "history_month": "This Month",
+        "date_format": "%B %d, %Y",
         "nav_stats": "Statistics",
         "stats_title": "Divination Stats",
         "stats_total": "Total Casts",
@@ -556,6 +650,32 @@ TEXTS = {
         "stats_method_dist": "Method Distribution",
         "stats_recent": "Recent Activity",
         "stats_times": "",
+        "error_404": "Page Not Found",
+        "error_403": "Access Denied",
+        "error_500": "Server Error",
+        "error_record_not_found": "Record Not Found",
+        "wechat_title": "Open in Browser",
+        "wechat_desc": "This page was opened in WeChat/QQ in-app browser. Some features may be limited. Please open in your system browser for the full experience.",
+        "wechat_step": "1. Tap the ⋯ button at the top right<br>2. Select Open in Browser",
+        "wechat_btn": "Got it",
+        "random_question": "Quick Cast · Daily Fortune",
+        "cat_random": "Random",
+        "trend_arrow": "{h}… → {c}…",
+        "cat_hints": {"love": "Love", "career": "Career", "wealth": "Wealth", "health": "Health", "people": "People", "random": "Daily Fortune", "general": "General Fortune"},
+        "moving_hints": "{n} moving lines — significant changes ahead.",
+        "aspect_names": {"love": "Love", "career": "Career", "wealth": "Wealth", "health": "Health", "travel": "People"},
+        "moving_data": {
+            "pos": ["1st Line", "2nd Line", "3rd Line", "4th Line", "5th Line", "6th Line"],
+            "kin": ["Parents", "Siblings", "Wife/Wealth", "Children", "Officials", "Parents"],
+            "dir_y": "Yang→Yin",
+            "dir_n": "Yin→Yang",
+            "meanings": {1: "Budding stage — foundation and beginning", 2: "Inner development — cultivation and accumulation", 3: "Transition — facing choices and tests", 4: "Near the throne — opportunity meets risk", 5: "Seat of power — core of career and leadership", 6: "Peak or turning point"},
+            "sum_base": "{n} moving lines",
+            "sum_1": " — focus concentrates on one point, direction is clear",
+            "sum_2": " — two forces intertwine, balance is needed",
+            "sum_3": " — many changes, complex situation, best to observe quietly",
+            "sum_4": " — extreme variability, avoid major decisions now",
+        },
     },
     "vi": {
         "app_title": "Quẻ Lục Hào",
@@ -570,7 +690,7 @@ TEXTS = {
         "question_label": "Câu hỏi / điều đang nghĩ",
         "question_placeholder": "Bạn có thể viết điều mình băn khoăn nhất, hoặc để trống chỉ xem vận thế chung.",
         "guide_title": "Lục Hào là gì?",
-        "guide_intro": "Lục Hào (Liu Yao), còn gọi là Phong Thủy dự đoán hay Chu Dịch, là một trong những phương pháp bói古老的 nhất của Trung Quốc, có lịch sử hơn 3.000 năm. Hệ thống tạo ra 6 hào (dương hoặc âm) bằng cách gieo xu hoặc phương pháp ngẫu nhiên, tạo thành một trong 64 quẻ. Kết hợp hào động (hào thay đổi), ta có quẻ gốc (trạng thái hiện tại) và quẻ biến (hướng đi tương lai), từ đó luận giải xu hướng và cách ứng xử.",
+        "guide_intro": "Lục Hào (Liu Yao), còn gọi là Phong Thủy dự đoán hay Chu Dịch, là một trong những phương pháp bói cổ xưa nhất của Trung Quốc, có lịch sử hơn 3.000 năm. Hệ thống tạo ra 6 hào (dương hoặc âm) bằng cách gieo xu hoặc phương pháp ngẫu nhiên, tạo thành một trong 64 quẻ. Kết hợp hào động (hào thay đổi), ta có quẻ gốc (trạng thái hiện tại) và quẻ biến (hướng đi tương lai), từ đó luận giải xu hướng và cách ứng xử.",
         "guide_step1": "Hãy tập trung suy nghĩ về điều bạn muốn hỏi. Càng cụ thể càng tốt. Ví dụ: 'Công việc hiện tại có phù hợp với mình không?' hiệu quả hơn là 'Vận thế của mình thế nào?'",
         "guide_step2": "Chọn cách gieo quẻ: 'Gieo bằng đồng xu' mô phỏng phương pháp truyền thống, chính thống nhất; 'Lấy thời gian' dùng thời điểm hiện tại; 'Nhập số' cho phép bạn nhập con số để gieo.",
         "guide_step3": "Nhấn 'Bắt đầu bói', hệ thống sẽ tạo quẻ gốc (trạng thái hiện tại) và quẻ biến (hướng đi tương lai), kèm luận giải chi tiết từ 5 phương diện: Tình cảm, Sự nghiệp, Tài vận, Sức khỏe, Quan hệ.",
@@ -658,6 +778,33 @@ TEXTS = {
         "history_today": "Hôm nay",
         "history_week": "Tuần này",
         "history_month": "Tháng này",
+        "date_format": "%d/%m/%Y",
+        "error_404": "Không tìm thấy trang",
+        "error_403": "Truy cập bị từ chối",
+        "error_500": "Lỗi server",
+        "error_record_not_found": "Không tìm thấy bản ghi",
+        "wechat_title": "Mở trong trình duyệt",
+        "wechat_desc": "Trang này đang được mở trong trình duyệt tích hợp của WeChat/QQ. Hãy mở trong trình duyệt hệ thống để có trải nghiệm đầy đủ.",
+        "wechat_step": "1. Nhấn nút ⋯ ở góc trên bên phải<br>2. Chọn Mở trong trình duyệt",
+        "wechat_btn": "Đã hiểu",
+        "random_question": "Bói nhanh · Vận hôm nay",
+        "cat_random": "Ngẫu nhiên",
+        "trend_arrow": "{h}… → {c}…",
+        "cat_hints": {"love": "Tình cảm", "career": "Sự nghiệp", "wealth": "Tài chính", "health": "Sức khỏe", "people": "Quan hệ", "random": "Vận hôm nay", "general": "Tổng quan"},
+        "moving_hints": "{n} hào động — nhiều biến đổi sắp tới.",
+        "aspect_names": {"love": "Tình cảm", "career": "Sự nghiệp", "wealth": "Tài chính", "health": "Sức khỏe", "travel": "Quan hệ"},
+        "moving_data": {
+            "pos": ["Hào sơ", "Hào nhị", "Hào tam", "Hào tứ", "Hào ngũ", "Hào thượng"],
+            "kin": ["Phụ mẫu", "Huynh đệ", "Thê tài", "Tử tôn", "Quan quỷ", "Phụ mẫu"],
+            "dir_y": "Dương→Âm",
+            "dir_n": "Âm→Dương",
+            "meanings": {1: "Giai đoạn nảy mầm — nền tảng và khởi đầu", 2: "Phát triển nội tại — tu dưỡng và tích lũy", 3: "Giai đoạn chuyển tiếp — đối mặt lựa chọn và thử thách", 4: "Vị trí gần vua — cơ hội và rủi ro cùng tồn tại", 5: "Vị trí quân — cốt lõi sự nghiệp và lãnh đạo", 6: "Đỉnh cao hoặc điểm chuyển"},
+            "sum_base": "{n} hào động",
+            "sum_1": " — tập trung vào một trọng tâm, hướng đi rõ ràng",
+            "sum_2": " — hai lực lượng đan xen, cần cân nhắc",
+            "sum_3": " — nhiều biến đổi, tình hình phức tạp, nên quan sát",
+            "sum_4": " — biến số cực nhiều, không nên quyết định lớn",
+        },
     },
     "ko": {
         "app_title": "육효 점",
@@ -758,9 +905,36 @@ TEXTS = {
         "history_today": "오늘",
         "history_week": "이번 주",
         "history_month": "이번 달",
+        "date_format": "%Y년 %m월 %d일",
         "original_hex": "본괘 (원래)",
         "changed_hex": "변괘 (변화 후)",
         "hex_overall": "괘 전체 해석",
+        "error_404": "페이지를 찾을 수 없습니다",
+        "error_403": "접근이 거부되었습니다",
+        "error_500": "서버 오류",
+        "error_record_not_found": "기록을 찾을 수 없습니다",
+        "wechat_title": "브라우저에서 열어주세요",
+        "wechat_desc": "微信/QQ 인앱 브라우저에서 열렸습니다. 시스템 브라우저에서 열어주세요.",
+        "wechat_step": "1. 오른쪽 상단의 ⋯ 버튼을 누르세요<br>2. 브라우저에서 열기를 선택하세요",
+        "wechat_btn": "알겠습니다",
+        "random_question": "빠른 점 · 오늘의 운세",
+        "cat_random": "랜덤",
+        "trend_arrow": "{h}… → {c}…",
+        "cat_hints": {"love": "연애", "career": "직업", "wealth": "재물", "health": "건강", "people": "인간관계", "random": "오늘의 운세", "general": "종합 운세"},
+        "moving_hints": "동효 {n}개 — 큰 변화가 예상됩니다.",
+        "aspect_names": {"love": "연애", "career": "직업", "wealth": "재물", "health": "건강", "travel": "인간관계"},
+        "moving_data": {
+            "pos": ["초효", "이효", "삼효", "사효", "오효", "상효"],
+            "kin": ["부모", "형제", "처재", "자손", "관귀", "부모"],
+            "dir_y": "양→음",
+            "dir_n": "음→양",
+            "meanings": {1: "싹트는 단계 — 기반과 시작", 2: "내적 발전기 — 수양과 축적", 3: "전환기 — 선택과 시련에 직면", 4: "군주 가까운 자리 — 기회와 공존", 5: "군위 — 사업의 핵심과 주도", 6: "극盛 또는 전환점"},
+            "sum_base": "동효 {n}개",
+            "sum_1": " — 사태가 하나의 초점에 집중, 변화 방향 명확",
+            "sum_2": " — 두 힘이 얽혀있어 균형 필요",
+            "sum_3": " — 변화가 많고 상황 복잡, 가만히 관찰하는 것이 좋음",
+            "sum_4": " — 변수가 극히 많아 중대 결정은 피하는 것이 좋음",
+        },
     },
 }
 
@@ -776,45 +950,67 @@ def get_lang():
 
 
 def get_db():
-    return sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    return conn
+
+
+@contextmanager
+def db_connection():
+    conn = get_db()
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def init_db():
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            method TEXT,
-            question TEXT,
-            category TEXT DEFAULT '',
-            hex_code INTEGER,
-            lines TEXT,
-            moving TEXT,
-            liuchin TEXT,
-            starred INTEGER DEFAULT 0,
-            created_at TEXT
+    with db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                method TEXT,
+                question TEXT,
+                category TEXT DEFAULT '',
+                hex_code INTEGER,
+                lines TEXT,
+                moving TEXT,
+                liuchin TEXT,
+                starred INTEGER DEFAULT 0,
+                created_at TEXT
+            )
+            """
         )
-        """
-    )
-    conn.commit()
-    conn.close()
+        conn.commit()
+    logger.info("Database initialized")
 
 
 def migrate_db():
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        cur.execute("ALTER TABLE history ADD COLUMN category TEXT DEFAULT ''")
-    except Exception:
-        pass
-    try:
-        cur.execute("ALTER TABLE history ADD COLUMN starred INTEGER DEFAULT 0")
-    except Exception:
-        pass
-    conn.commit()
-    conn.close()
+    with db_connection() as conn:
+        cur = conn.cursor()
+        migrations = [
+            "ALTER TABLE history ADD COLUMN category TEXT DEFAULT ''",
+            "ALTER TABLE history ADD COLUMN starred INTEGER DEFAULT 0",
+        ]
+        for sql in migrations:
+            try:
+                cur.execute(sql)
+            except Exception:
+                pass
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_history_created_at ON history(created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_history_hex_code ON history(hex_code)",
+            "CREATE INDEX IF NOT EXISTS idx_history_question ON history(question)",
+            "CREATE INDEX IF NOT EXISTS idx_history_starred ON history(starred)",
+        ]
+        for idx_sql in indexes:
+            cur.execute(idx_sql)
+        conn.commit()
+    logger.info("Database migration complete")
 
 
 # ========== 起卦相关 ==========
@@ -840,10 +1036,10 @@ def make_lines(method, number=None):
 
     elif method == "time":
         now = datetime.now()
-        seed = now.hour * 3600 + now.minute * 60 + now.second
-        random.seed(seed)
+        seed = now.year * 31536000 + now.month * 2592000 + now.day * 86400 + now.hour * 3600 + now.minute * 60 + now.second + now.microsecond
+        local_rng = random.Random(seed)
         for i in range(6):
-            v = random.randint(0, 1)
+            v = local_rng.randint(0, 1)
             lines.append(v)
         moving = [3]
 
@@ -875,9 +1071,9 @@ def lines_to_code(lines):
     return code
 
 
-def calc_liuchin(lines):
-    # 简化版六亲，只是起个展示作用
-    return ["父母", "兄弟", "妻财", "子孙", "官鬼", "父母"]
+def calc_liuchin(lines, lang="zh"):
+    t = TEXTS.get(lang, TEXTS["zh"])
+    return t.get("moving_data", {}).get("kin", ["Parents", "Siblings", "Wife/Wealth", "Children", "Officials", "Parents"])
 
 
 def calc_changed_lines(lines, moving):
@@ -891,80 +1087,12 @@ def calc_changed_lines(lines, moving):
 
 
 def analyze_moving_lines(lines, moving, lang="zh"):
-    """Analyze all moving lines for detailed reading."""
     if not moving:
         return {"has_moving": False, "count": 0, "details": []}
 
-    data = {
-        "zh": {
-            "pos": ["初爻", "二爻", "三爻", "四爻", "五爻", "上爻"],
-            "kin": ["父母", "兄弟", "妻财", "子孙", "官鬼", "父母"],
-            "dir_y": "阳变阴", "dir_n": "阴变阳",
-            "meanings": {1: "事物的萌芽阶段，基础和起始", 2: "内在发展期，个人修养和积累", 3: "过渡阶段，面临抉择和考验", 4: "近君之位，机遇与风险并存", 5: "君位，事业的核心和主导", 6: "事物的极盛或转折点"},
-            "sum_base": "共{n}个动爻",
-            "sum_1": "，事态集中于一个焦点，变化方向明确",
-            "sum_2": "，两种力量交织，需要权衡取舍",
-            "sum_3": "，变化较多，局势复杂，宜静观其变",
-            "sum_4": "，变数极多，当前不宜做重大决定",
-        },
-        "ja": {
-            "pos": ["初爻", "二爻", "三爻", "四爻", "五爻", "上爻"],
-            "kin": ["父母", "兄弟", "妻財", "子孫", "官鬼", "父母"],
-            "dir_y": "陽→陰", "dir_n": "陰→陽",
-            "meanings": {1: "物事の萌芽段階、基礎と出発点", 2: "内在発展期、個人の修養と蓄積", 3: "移行段階、選択と試練に直面", 4: "君主に近い位置、機会とリスクが共存", 5: "君位、事業の核心と主導", 6: "物事の極盛または転換点"},
-            "sum_base": "動爻{n}個",
-            "sum_1": "、事態は一つの焦点に集中し、変化の方向は明確",
-            "sum_2": "、二つの力が絡み合い、バランスを取る必要あり",
-            "sum_3": "、変化が多く、状況は複雑、静観が吉",
-            "sum_4": "、変動が極めて多く、重大な決定は控えめに",
-        },
-        "en": {
-            "pos": ["1st Line", "2nd Line", "3rd Line", "4th Line", "5th Line", "6th Line"],
-            "kin": ["Parents", "Siblings", "Wife/Wealth", "Children", "Officials", "Parents"],
-            "dir_y": "Yang→Yin", "dir_n": "Yin→Yang",
-            "meanings": {1: "Budding stage — foundation and beginning", 2: "Inner development — cultivation and accumulation", 3: "Transition — facing choices and tests", 4: "Near the throne — opportunity meets risk", 5: "Seat of power — core of career and leadership", 6: "Peak or turning point"},
-            "sum_base": "{n} moving lines",
-            "sum_1": " — focus concentrates on one point, direction is clear",
-            "sum_2": " — two forces intertwine, balance is needed",
-            "sum_3": " — many changes, complex situation, best to observe quietly",
-            "sum_4": " — extreme variability, avoid major decisions now",
-        },
-        "vi": {
-            "pos": ["Hào sơ", "Hào nhị", "Hào tam", "Hào tứ", "Hào ngũ", "Hào thượng"],
-            "kin": ["Phụ mẫu", "Huynh đệ", "Thê tài", "Tử tôn", "Quan quỷ", "Phụ mẫu"],
-            "dir_y": "Dương→Âm", "dir_n": "Âm→Dương",
-            "meanings": {1: "Giai đoạn nảy mầm — nền tảng và khởi đầu", 2: "Phát triển nội tại — tu dưỡng và tích lũy", 3: "Giai đoạn chuyển tiếp — đối mặt lựa chọn và thử thách", 4: "Vị trí gần vua — cơ hội và rủi ro cùng tồn tại", 5: "Vị trí quân — cốt lõi sự nghiệp và lãnh đạo", 6: "Đỉnh cao hoặc điểm转折"},
-            "sum_base": "{n} hào động",
-            "sum_1": " — tập trung vào một焦点, hướng đi rõ ràng",
-            "sum_2": " — hai lực lượng đan xen, cần cân nhắc",
-            "sum_3": " — nhiều biến đổi, tình hình phức tạp, nên quan sát",
-            "sum_4": " — biến số cực nhiều, không nên quyết định lớn",
-        },
-        "ko": {
-            "pos": ["초효", "이효", "삼효", "사효", "오효", "상효"],
-            "kin": ["부모", "형제", "처재", "자손", "관귀", "부모"],
-            "dir_y": "양→음", "dir_n": "음→양",
-            "meanings": {1: "싹트는 단계 — 기반과 시작", 2: "내적 발전기 — 수양과 축적", 3: "전환기 — 선택과 시련에 직면", 4: "군주 가까운 자리 — 기회와 공존", 5: "군위 — 사업의 핵심과 주도", 6: "극盛 또는 전환점"},
-            "sum_base": "동효 {n}개",
-            "sum_1": " — 사태가 하나의 초점에 집중, 변화 방향 명확",
-            "sum_2": " — 두 힘이 얽혀있어 균형 필요",
-            "sum_3": " — 변화가 많고 상황 복잡, 가만히 관찰하는 것이 좋음",
-            "sum_4": " — 변수가 극히 많아 중대 결정은 피하는 것이 좋음",
-        },
-        "my": {
-            "pos": ["ပထမအကြောင်း", "ဒုတိယအကြောင်း", "တတိယအကြောင်း", "စတုတ္ထအကြောင်း", "ပဉ္စမအကြောင်း", "ဆဋ္ဌမအကြောင်း"],
-            "kin": ["မိဘ", "ညီအစ်ကိုမောင်နှမ", "ဇနီး/ငွေကြေး", "သားသမီး", "အရာရှိ", "မိဘ"],
-            "dir_y": "အမျိုးသား→အမျိုးသမီး", "dir_n": "အမျိုးသမီး→အမျိုးသား",
-            "meanings": {1: "အစပျိုးခြင်းအဆင့် — အခြေခံနှင့် အစပျိုးခြင်း", 2: "အတွင်းပိုင်းဖွံ့ဖြိုးခြင်း — ကိုယ်ကျင့်တရားနှင့် စုဆောင်းခြင်း", 3: "ပြောင်းလဲခြင်းအဆင့် — ဆုံးဖြတ်ချက်များနှင့် စမ်းသပ်မှုများ", 4: "ဘုရင်နှင့် နီးကပ်သည့်နေရာ — အခွင့်အရေးနှင့် အန္တရာယ်", 5: "ဘုရင်နေရာ — အလုပ်၏ အဓိကနှင့် ဦးဆောင်မှု", 6: "အမြင့်ဆုံး သို့မဟုတ် ပြောင်းလဲမှုအမှတ်"},
-            "sum_base": "လှုပ်ရှားသည့်အကြောင်းအရာ {n} ခု",
-            "sum_1": " — အဓိကအာရုံချက်တစ်ခုတည်းတွင် စုပေါင်းပြီး ပြောင်းလဲမှု ဦးတည်ချက်ရှင်းလင်းသည်",
-            "sum_2": " — အင်အားနှစ်ခု ထွေထွေရှုပ်နေပြီး ဟန်ချက်ညီအောင် လုပ်ရန် လိုအပ်သည်",
-            "sum_3": " — ပြောင်းလဲမှုများပြားပြီး အခြေအနေရှုပ်ထွေးသည်၊ ငြိမ်သက်စွာ ကြည့်ရှုရန် သင့်တော်သည်",
-            "sum_4": " — ပြောင်းလဲမှုများ အလွန်များပြားပြီး အရေးကြီးသည့် ဆုံးဖြတ်ချက်များ ချမှတ်ခြင်းမပြုသင့်ပါ",
-        },
-    }
+    t = TEXTS.get(lang, TEXTS["zh"])
+    d = t.get("moving_data", TEXTS["zh"]["moving_data"])
 
-    d = data.get(lang, data["zh"])
     details = []
     for m in moving:
         pos = int(m)
@@ -992,32 +1120,30 @@ def analyze_moving_lines(lines, moving, lang="zh"):
 
 
 def build_trend_analysis(hex_code, changed_code, moving_count):
-    """Build a trend analysis showing how the situation evolves from 本卦 to 变卦."""
     hex_interp = INTERPRETATIONS.get(hex_code, {})
     changed_interp = INTERPRETATIONS.get(changed_code, {})
 
     trend = {}
-    for lang in ["zh", "ja", "en", "vi", "ko", "my"]:
-        h_name = hex_interp.get("overall", {}).get("title", {}).get(lang, "")
-        c_name = changed_interp.get("overall", {}).get("title", {}).get(lang, "")
+    for lang in LANGS:
+        t = TEXTS.get(lang, TEXTS["zh"])
         h_desc = hex_interp.get("overall", {}).get("desc", {}).get(lang, "")
         c_desc = changed_interp.get("overall", {}).get("desc", {}).get(lang, "")
 
         if lang == "zh":
             if h_desc and c_desc and h_desc != c_desc:
-                trend[lang] = f"从当前卦象「{h_desc[:30]}…」到变卦「{c_desc[:30]}…」，事态正在从一种状态向另一种状态转变。动爻越多，变化越剧烈。变卦揭示了事物发展的最终走向。"
+                trend[lang] = t.get("trend_zh_from", "").format(h=h_desc[:30], c=c_desc[:30])
             elif h_desc:
-                trend[lang] = f"当前卦象的核心含义是「{h_desc[:50]}…」。变卦与本卦相同或相近，意味着当前状态比较稳定，短期内不会有根本性的变化。"
+                trend[lang] = t.get("trend_zh_stable", "").format(h=h_desc[:50])
             else:
-                trend[lang] = "变卦揭示了事物发展的最终走向。建议结合本卦和变卦综合判断。"
+                trend[lang] = t.get("trend_zh_default", "")
         else:
-            # For non-zh languages, use the overall desc in that language
+            arrow = t.get("trend_arrow", "{h}… → {c}…")
             if h_desc and c_desc and h_desc != c_desc:
-                trend[lang] = f"{h_desc[:40]}… → {c_desc[:40]}…"
+                trend[lang] = arrow.format(h=h_desc[:40], c=c_desc[:40])
             elif h_desc:
                 trend[lang] = h_desc[:80] + "…" if len(h_desc) > 80 else h_desc
             else:
-                trend[lang] = h_desc if h_desc else ""
+                trend[lang] = ""
 
     return trend
 
@@ -1032,15 +1158,9 @@ def get_daily_fortune(lang="zh"):
     overall = interp.get("overall", {})
     title = overall.get("title", {})
     desc = overall.get("desc", {})
-    date_formats = {
-        "zh": today.strftime("%Y年%m月%d日"),
-        "ja": today.strftime("%Y年%m月%d日"),
-        "en": today.strftime("%B %d, %Y"),
-        "vi": today.strftime("%d/%m/%Y"),
-        "ko": today.strftime("%Y년 %m월 %d일"),
-        "my": today.strftime("%Y-%m-%d"),
-    }
-    date_str = date_formats.get(lang, date_formats["en"])
+    t = TEXTS.get(lang, TEXTS["en"])
+    date_fmt = t.get("date_format", "%Y-%m-%d")
+    date_str = today.strftime(date_fmt)
     return {
         "hex_code": hex_code,
         "hex_no": hex_code + 1,
@@ -1051,34 +1171,19 @@ def get_daily_fortune(lang="zh"):
 
 
 def build_summary(hex_code, lines, moving, category, lang="zh"):
-    """Build a concise summary based on hexagram and question category."""
     interp = INTERPRETATIONS.get(hex_code, {})
     overall_title = interp.get("overall", {}).get("title", {})
     overall_desc = interp.get("overall", {}).get("desc", {})
 
-    cat_hints = {
-        "zh": {"love": "感情方面", "career": "事业方面", "wealth": "财运方面", "health": "健康方面", "people": "人际方面", "random": "今日运势", "general": "综合运势"},
-        "ja": {"love": "恋愛", "career": "仕事", "wealth": "金運", "health": "健康", "people": "人間関係", "random": "今日の運勢", "general": "総合運勢"},
-        "en": {"love": "Love", "career": "Career", "wealth": "Wealth", "health": "Health", "people": "People", "random": "Daily Fortune", "general": "General Fortune"},
-        "vi": {"love": "Tình cảm", "career": "Sự nghiệp", "wealth": "Tài chính", "health": "Sức khỏe", "people": "Quan hệ", "random": "Vận hôm nay", "general": "Tổng quan"},
-        "ko": {"love": "연애", "career": "직업", "wealth": "재물", "health": "건강", "people": "인간관계", "random": "오늘의 운세", "general": "종합 운세"},
-        "my": {"love": "ချစ်ခြင်း", "career": "အလုပ်", "wealth": "ငွေကြေး", "health": "ကျန်းမာရေး", "people": "လူမှုဆက်ဆံ", "random": "ယနေ့ ကံကြမ္မာ", "general": "အထွေထွေ ကံကြမ္မာ"},
-    }
-
-    moving_hints = {
-        "zh": "有{n}个动爻，变化较多。",
-        "ja": "動爻{n}個で、変化が多い時期です。",
-        "en": "{n} moving lines — significant changes ahead.",
-        "vi": "{n} hào động — nhiều biến đổi sắp tới.",
-        "ko": "동효 {n}개 — 큰 변화가 예상됩니다.",
-        "my": "လှုပ်ရှားသည့်အကြောင်းအရာ {n} ခု — ပြောင်းလဲမှုများ များပြားပါသည်။",
-    }
+    t = TEXTS.get(lang, TEXTS["zh"])
+    cat_hints = t.get("cat_hints", {})
+    moving_hints = t.get("moving_hints", "")
 
     title_text = overall_title.get(lang, overall_title.get("zh", ""))
     desc_text = overall_desc.get(lang, overall_desc.get("zh", ""))
     first_sentence = desc_text.split("。")[0] + "。" if lang == "zh" else desc_text.split(".")[0].strip() + "." if desc_text else ""
-    cat_hint = cat_hints.get(lang, cat_hints["zh"]).get(category, cat_hints.get(lang, cat_hints["zh"]).get("general", ""))
-    moving_hint = moving_hints.get(lang, moving_hints["zh"]).format(n=len(moving)) if moving else ""
+    cat_hint = cat_hints.get(category, cat_hints.get("general", ""))
+    moving_hint = moving_hints.format(n=len(moving)) if moving else ""
 
     summary_punct = {
         "zh": ("【", "】", "："),
@@ -1104,14 +1209,10 @@ def build_fortune_comparison(hex_code, changed_code):
         return None
 
     aspects = ["love", "career", "wealth", "health", "travel"]
-    aspect_names = {
-        "zh": {"love": "感情", "career": "事业", "wealth": "财运", "health": "健康", "travel": "人际"},
-        "ja": {"love": "恋愛", "career": "仕事", "wealth": "金運", "health": "健康", "travel": "人間関係"},
-        "en": {"love": "Love", "career": "Career", "wealth": "Wealth", "health": "Health", "travel": "People"},
-        "vi": {"love": "Tình cảm", "career": "Sự nghiệp", "wealth": "Tài chính", "health": "Sức khỏe", "travel": "Quan hệ"},
-        "ko": {"love": "연애", "career": "직업", "wealth": "재물", "health": "건강", "travel": "인간관계"},
-        "my": {"love": "ချစ်ခြင်း", "career": "အလုပ်", "wealth": "ငွေကြေး", "health": "ကျန်းမာရေး", "travel": "လူမှုဆက်ဆံ"},
-    }
+    aspect_names = {}
+    for l in LANGS:
+        lt = TEXTS.get(l, TEXTS["zh"])
+        aspect_names[l] = lt.get("aspect_names", {})
 
     comparison = {}
     for lang in ["zh", "ja", "en", "vi", "ko", "my"]:
@@ -1168,15 +1269,15 @@ def build_analysis(lines, moving, liuchin, hex_code):
     love_now_extra = L(
         f"\n\n从卦象来看，你目前的感情状态受到「{focus_kin}」的影响较大。这意味着你的情感走向与现实环境密不可分——比如工作压力、经济状况、家庭背景等因素都在间接影响着你的感情生活。建议你先理清这些外在因素，再去看感情本身。"
         f"\n\n具体来说：如果你是单身，目前的社交圈可能比较固定，需要主动拓展接触面，比如参加兴趣班、朋友聚会或线上社交活动；如果你正在暧昧期，对方的态度可能还不够明确，不妨多观察一段时间；如果你已有伴侣，最近可能因为琐事产生小摩擦，但只要双方愿意沟通，问题不大。",
-        f"\n\n卦象から見ると、今の恋愛運は「{focus_kin}」の影響を強く受けています。感情の動きが現実の環境（仕事・経済・家族など）と深く結びついている状態です。まずこれらの外的要因を整理してから、感情そのものを見つめ直すことが大切です。"
+        f"\n\n卦から見ると、今の恋愛運は「{focus_kin}」の影響を強く受けています。感情の動きが現実の環境（仕事・経済・家族など）と深く結びついている状態です。まずこれらの外的要因を整理してから、感情そのものを見つめ直すことが大切です。"
         f"\n\n具体的には：独身の方は現在の交友関係が固定されがちなので、趣味の教室や友人の集まり、オンライン交流など場を広げましょう。曖昧な関係にある方は、相手の様子をもう少し観察する時間を設けてください。パートナーがいる方は、些細なことでぶつかるかもしれませんが、話せば解決する問題です。",
         f"\n\nLooking at the hexagram, your current love situation is strongly influenced by the '{focus_kin}' line. This means your emotional state is deeply connected to practical circumstances — work stress, finances, family background all play a role. Try to sort out these external factors before examining the relationship itself."
         f"\n\nSpecifically: if you're single, your social circle may be quite fixed — consider joining classes, attending friend gatherings, or trying online social platforms. If you're in an ambiguous stage, give it more time and observe. If you're in a relationship, small frictions from daily life are normal, but open communication resolves them quickly.",
-        f"\n\nNhìn vào卦象, tình cảm hiện tại chịu ảnh hưởng lớn của '{focus_kin}'. Cảm xúc gắn liền với hoàn cảnh thực tế — áp lực công việc, tài chính, gia đình đều ảnh hưởng gián tiếp. Hãy giải quyết các yếu tố bên ngoài trước khi nhìn vào chuyện tình cảm."
+        f"\n\nNhìn vào quẻ, tình cảm hiện tại chịu ảnh hưởng lớn của '{focus_kin}'. Cảm xúc gắn liền với hoàn cảnh thực tế — áp lực công việc, tài chính, gia đình đều ảnh hưởng gián tiếp. Hãy giải quyết các yếu tố bên ngoài trước khi nhìn vào chuyện tình cảm."
         f"\n\nCụ thể: nếu độc thân, vòng tròn quan hệ hiện tại khá cố định, cần chủ động mở rộng — lớp học sở thích, tụ tập bạn bè, mạng xã hội. Nếu đang ở giai đoạn mập mờ, hãy quan sát thêm. Nếu đã có partner, bất đồng nhỏ từ cuộc sống hàng ngày là bình thường, chỉ cần chịu nói chuyện là giải quyết được.",
-        f"\n\n卦象를 보면 현재 연애운은 '{focus_kin}'의 영향을 크게 받습니다. 감정이 현실 상황(업무, 경제, 가족 등)과 깊게 연결되어 있습니다. 이러한 외적 요인을 정리한 후 감정을 바라보는 것이 중요합니다."
+        f"\n\n괘를 보면 현재 연애운은 '{focus_kin}'의 영향을 크게 받습니다. 감정이 현실 상황(업무, 경제, 가족 등)과 깊게 연결되어 있습니다. 이러한 외적 요인을 정리한 후 감정을 바라보는 것이 중요합니다."
         f"\n\n구체적으로: 솔로라면 현재 교제 범위가 고정되기 쉬우니 관심사 모임, 친구 모임, 온라인 소셜 등 범위를 넓혀보세요. 애매한 관계라면 좀 더 관찰하는 시간을 가지세요. 파트너가 있다면 사소한 마찰이 있을 수 있지만 대화로 해결할 수 있습니다.",
-        f"\n\n卦象မှကြည့်ပါက သင့်ချစ်ခြင်းမေတ္တာအခြေအနေသည် 「{focus_kin}」 ၏ သက်ရောက်မှုကြီးမားပါသည်။ သင့်စိတ်ခံစားမှုသည် လက်တွေ့အခြေအနေနှင့် ချိတ်ဆက်နေပါသည် — အလုပ်ဖိအား၊ ငွေကြေး၊ မိသားစုနောက်ခံတို့က သင့်ချစ်ခြင်းဘဝကို သက်ရောက်နေပါသည်။ ဒီအပြင်ပိုင်းအချက်အလက်များကို ရှင်းလင်းပြီးမှ ချစ်ခြင်းမေတ္တာကို ကြည့်ပါ။"
+        f"\n\nဗေဒမှကြည့်ပါက သင့်ချစ်ခြင်းမေတ္တာအခြေအနေသည် 「{focus_kin}」 ၏ သက်ရောက်မှုကြီးမားပါသည်။ သင့်စိတ်ခံစားမှုသည် လက်တွေ့အခြေအနေနှင့် ချိတ်ဆက်နေပါသည် — အလုပ်ဖိအား၊ ငွေကြေး၊ မိသားစုနောက်ခံတို့က သင့်ချစ်ခြင်းဘဝကို သက်ရောက်နေပါသည်။ ဒီအပြင်ပိုင်းအချက်အလက်များကို ရှင်းလင်းပြီးမှ ချစ်ခြင်းမေတ္တာကို ကြည့်ပါ။"
         f"\n\nအသေးစိတ်အားဖြင့် — လက်ထပ်မထိတ်သေးသူများ: သင့်လူမှုဆက်ဆံရေးသည် အကျပ်အတည်းဖြစ်နိုင်ပါသည်၊ ဝါသနာအုပ်စုများ၊ မိတ်ဆွေစုဝေးပွဲများ စသည်တို့ကို တက်ကြွစွာ တက်ရောက်ပါ။ ချစ်သူရှိသူများ: လောလောဆယ် သေးငယ်သည့်ကိစ္စများကြောင့် ပဋိပက္ခဖြစ်နိုင်ပါသည်၊ သို့သော် စကားပြောဆိုပါက ဖြေရှင်းနိုင်ပါသည်။",
     )
 
@@ -1189,7 +1290,7 @@ def build_analysis(lines, moving, liuchin, hex_code):
         f"\n\n今後の恋愛運は「{focus_kin}」が示す流れに沿って展開します。"
         f"\n\n• もし今の関係が安定しているなら、「選択を迫られる」段階が来ます。交際の確定、家族への挨拶、将来の話など。急ぐ必要はありませんが、先送りにしすぎないでください。"
         f"\n• もし今の関係に不安定さがあるなら、少しずつはっきりしてくるでしょう。迷わせていた要因が浮き彫りになり、判断の助けになります。"
-        f"\n• 新しい出会い方面では、仕事や友人紹介、社交の場で気になる人に出会う可能性があります。ただし、本心还是一时の新鲜感を見分けてください。"
+        f"\n• 新しい出会い方面では、仕事や友人紹介、社交の場で気になる人に出会う可能性があります。ただし、本心か一時的な新鮮感かを見分けてください。"
         f"\n• 複縁については、双方に诚意があれば可能性があります。一方的な努力だけでは不十分です。",
         f"\n\nIn the coming period, your love fortune will follow the trend indicated by the '{focus_kin}' line."
         f"\n\n• If your relationship is stable, you'll enter a phase requiring choices — defining the relationship, meeting families, discussing future plans. No rush, but don't keep avoiding it either."
@@ -1224,8 +1325,8 @@ def build_analysis(lines, moving, liuchin, hex_code):
         f"\n\n1. 主動的に、でも急がずに：気になる人がいたら、お茶や共通のイベントに誘いましょう。すぐに告白したり「何の関係？」と聞くのは避けて。"
         f"\n2. 自分磨き：今の時期は自分自身に注目——ジム、読書、新しいスキル。自分が良くなれば、自然と良い相手が引き寄せられます。"
         f"\n3. コミュニケーション術：パートナーとの意見の違いは「私はこう感じた」 instead of「あなたはいつも……」で伝えてください。前者は聞き入れられ、後者は拒絶反応を起こします。"
-        f"\n4. 赤旗シグナル：相手が長時間返信しない、会うのを总是断る、言行が一致しない——これはあなたを大切にしていないサインかもしれません。"
-        f"\n5. 好印象シグナル：相手から日常を共有してくる、你说过的小事记住、必要な時にいてくれる——这些都是好意のサインです。",
+        f"\n4. 赤旗シグナル：相手が長時間返信しない、会うのをいつも断る、言行が一致しない——これはあなたを大切にしていないサインかもしれません。"        
+        f"\n5. 好印象シグナル：相手から日常を共有してくる、あなたが言った小さなことを覚えて、必要な時にいてくれる——これらはすべて好意のサインです。",
         f"\n\n【Specific Action Advice】"
         f"\n\n1. Be proactive but not pushy: If you're interested in someone, suggest meeting for coffee or a shared activity. Don't confess feelings or ask 'what are we?' too early."
         f"\n2. Work on yourself: This is a great time to focus on self-improvement — exercise, reading, new skills. When you become your best self, you naturally attract better matches."
@@ -1320,7 +1421,7 @@ def build_analysis(lines, moving, liuchin, hex_code):
         f"\n\n• Mentor luck: You may encounter a senior or mentor who helps your career. Cherish this connection. You can also be someone else's mentor — helping others accumulates your own good fortune.",
         f"\n\nTương lai sự nghiệp:"
         f"\n\n• Ngắn hạn (1-3 tháng): Có thể có cơ hội hoặc thử thách quan trọng — dự án mới, phỏng vấn thăng chức, kỳ thi. Quẻ hint bạn cần「chủ động tranh thủ」không phải chờ đợi."
-        f"\n\n• Trung hạn (3-6 tháng): Nếu nền tảng tốt, giai đoạn này sẽ có tiến triển rõ rệt — thăng chức, dự án thành công,突破 học tập."
+        f"\n\n• Trung hạn (3-6 tháng): Nếu nền tảng tốt, giai đoạn này sẽ có tiến triển rõ rệt — thăng chức, dự án thành công, đột phá học tập."
         f"\n• Xu hướng dài hạn: Con đường sự nghiệp tổng thể tích cực, nhưng có dao động. Chìa khóa là kiên trì, đừng thay đổi hướng lớn vì được mất nhất thời."
         f"\n• Quý nhân: Có thể gặp tiền bối hoặc người cố vấn giúp sự nghiệp. Hãy trân trọng mối quan hệ này. Bạn cũng có thể trở thành quý nhân của người khác — giúp người cũng là tích phúc cho mình.",
         f"\n\n직업의 미래 흐름:"
@@ -1409,7 +1510,7 @@ def build_analysis(lines, moving, liuchin, hex_code):
         f"\n\nVề tài chính, '{focus_kin}' ảnh hưởng trực tiếp đến tình hình tài chính của bạn."
         f"\n\n• Thu nhập chính (lương/thu nhập cố định): Vận thu nhập chính gần đây ổn định, phù hợp nỗ lực làm việc để tăng thu nhập. Nếu có cơ hội tăng lương hoặc thưởng, hãy chủ động tranh thủ."
         f"\n\n• Thu nhập phụ (đầu tư/kiếm thêm/thu nhập bất ngờ): Vận thu nhập phụ dao động mạnh, không phù hợp đầu tư rủi ro cao (cổ phiếu, tiền mã hóa, cờ bạc). Cẩn thận với các dự án \"đảm bảo lời\"."
-        f"\n\n• Thói quen tiêu dùng: Có thể có xu hướng tiêu xài bốc đồng, đặc biệt mua sắm online và chi tiêu vì面子. Trước mỗi khoản chi hãy hỏi: \"Đây có phải đồ cần thiết không?\", \"Có thể đợi 1 tuần không?\", \"Có thay thế rẻ hơn không?\""
+        f"\n\n• Thói quen tiêu dùng: Có thể có xu hướng tiêu xài bốc đồng, đặc biệt mua sắm online và chi tiêu vì mặt mũi. Trước mỗi khoản chi hãy hỏi: \"Đây có phải đồ cần thiết không?\", \"Có thể đợi 1 tuần không?\", \"Có thay thế rẻ hơn không?\""
         f"\n\n• Quản lý nợ: Nếu có khoản vay hoặc thẻ tín dụng, ưu tiên trả nợ lãi suất cao. Đừng lấy nợ trả nợ, chỉ khiến lỗ hổng ngày càng lớn.",
         f"\n\n재정 면에서 '{focus_kin}'이 재정 상태에 직접적인 영향을 줍니다."
         f"\n\n• 정기 소득(급여/고정 수입): 최근 정기 소득 운은 안정적이며, 노력에 의한 수입 증가가 기대됩니다. 승진이나 보너스 기회가 있다면 적극적으로 찾아가세요."
@@ -1485,7 +1586,7 @@ def build_analysis(lines, moving, liuchin, hex_code):
         f"\n\n1. 가계부 습관: 스마트폰 가계부 앱으로 매일 지출을 기록하고 월말에 리뷰하세요. \"불필요한 지출\"이 많이 발견될 것입니다."
         f"\n\n2. 자동 저축: 급여가 들어오면 자동으로 일정액을 저축 계좌로 이체하세요. \"먼저 저축하고 나서 쓰기\"는 \"쓰고 남은 것 저축하기\"보다 10배 효과적입니다."
         f"\n\n3. 금융 리터러시: 기본적인 금융 지식(펀드투자, 보험, 세금)을 배우세요. 이 지식이 돈을 절약하거나 더 많이 벌게 해줍니다."
-        f"\n\n4. 부업 탐색: 본업 소득이 안정적이라면 부업도 고려해보세요. 자신의 기술과 맞는 방향을 선택하고 유행에盲目하게 따르지는 마세요."
+        f"\n\n4. 부업 탐색: 본업 소득이 안정적이라면 부업도 고려해보세요. 자신의 기술과 맞는 방향을 선택하고 유행에 무작정 따르지는 마세요."
         f"\n\n5. 비상금: 최소 3-6개월 생활비를 비상금으로 확보하세요. 이것이 당신의 재정 안전망입니다.",
         f"\n\n【လက်တွေ့လုပ်ဆောင်ရန် အကြံပြုချက်များ】"
         f"\n\n၁။ ငွေစာရင်းမှတ်တမ်း ထားပါ — ဖုန်းငွေစာရင်း app ဖြင့် သုံးစွဲငွေတိုင်းကို မှတ်ပြီး လပြတ်ပြန်လည်သုံးသပ်ပါ။ 'မလိုအပ်သည့် သုံးစွဲမှု' များစွာ တွေ့ရပါမည်။"
@@ -1530,11 +1631,11 @@ def build_analysis(lines, moving, liuchin, hex_code):
         f"\n\n• Diet advice: Eat lightly recently. Reduce greasy, spicy, and cold foods. Eat more vegetables and fruits, keep regular meal times."
         f"\n\n• Exercise advice: No need for intense workouts. 30 minutes of moderate exercise daily (brisk walking, swimming, cycling) is enough. Consistency matters more than intensity."
         f"\n\n• Sleep adjustment: Try to sleep before 11 PM. Sleep deprivation affects immunity and judgement. If you often stay up late, put your phone out of reach.",
-        f"\n\nVề sức khỏe, '{focus_kin}' nhắc bạn cần特别 lưu ý các lĩnh vực sau:"
+        f"\n\nVề sức khỏe, '{focus_kin}' nhắc bạn cần đặc biệt lưu ý các lĩnh vực sau:"
         f"\n\n• Tín hiệu cơ thể: Nếu gần đây có triệu chứng đau đầu, mất ngủ, rối loạn tiêu hóa, đau vai gáy, đừng bỏ qua. Cơ thể đang nhắc bạn điều chỉnh lối sống."
         f"\n\n• Sức khỏe tinh thần: Áp lực lớn dễ gây lo lắng hoặc chán nản. Dành 15 phút mỗi ngày cho「thời gian thả trống」— đi bộ, nghe nhạc, thiền đều được."
         f"\n\n• Lời khuyên ăn uống: Giai đoạn này phù hợp ăn nhạt, ít dầu mỡ, cay, lạnh. Nhiều rau củ quả hơn, giữ bữa ăn đúng giờ."
-        f"\n\n• Lời khuyên vận động: Không cần vận động mạnh. 30 phút vận động cường độ trung bình mỗi ngày (đi bộ nhanh, bơi, đạp xe) là đủ. Quan trọng là坚持, không phải cường độ."
+        f"\n\n• Lời khuyên vận động: Không cần vận động mạnh. 30 phút vận động cường độ trung bình mỗi ngày (đi bộ nhanh, bơi, đạp xe) là đủ. Quan trọng là sự kiên trì, không phải cường độ."
         f"\n\n• Điều chỉnh giấc ngủ: Cố gắng ngủ trước 23 giờ. Thiếu ngủ ảnh hưởng đến miễn dịch và phán đoán. Nếu thường xuyên thức khuya, thử để điện thoại ở nơi không với tới.",
         f"\n\n건강 면에서 '{focus_kin}'은 다음 영역에 특별한 주의를 기울여야 함을 나타냅니다:"
         f"\n\n• 신체 신호: 최근 두통, 불면, 소화 장애, 어깨 결림 등의 증상이 있다면 무시하지 마세요. 몸이 생활 습관 조정을 알리고 있습니다."
@@ -1595,7 +1696,7 @@ def build_analysis(lines, moving, liuchin, hex_code):
         f"\n\n2. 作業中の休憩：1時間ごとに立ち上がって5分動く。ストレッチをしたり、遠くを見たり。"
         f"\n\n3. 呼吸練習：ストレスを感じたら4-7-8呼吸法（4秒吸う・7秒止める・8秒吐く）を3-5回繰り返してみてください。"
         f"\n\n4. 社交と健康：友人と一緒に運動する方が一人で続けるより簡単です。運動パートナーやグループを見つけましょう。"
-        f"\n\n5. 東洋医学養生：卦象から見ると、「{focus_kin}」に関連する臓器を養う時期です。漢方の先生に具体的な養生法を聞いてみてください。",
+        f"\n\n5. 東洋医学養生：卦から見ると、「{focus_kin}」に関連する臓器を養う時期です。漢方の先生に具体的な養生法を聞いてみてください。",
         f"\n\n【Specific Action Advice】"
         f"\n\n1. Establish routines: Set fixed wake-up and bedtime, even on weekends."
         f"\n\n2. Work breaks: Every hour, stand up and move for 5 minutes. Stretch, look at something distant."
@@ -1603,17 +1704,17 @@ def build_analysis(lines, moving, liuchin, hex_code):
         f"\n\n4. Social health: Exercising with friends is easier than alone. Find a workout buddy or join a fitness group."
         f"\n\n5. TCM wellness: According to the hexagram, this is a good time to nurture organs related to '{focus_kin}'. Consult a TCM practitioner for specific advice.",
         f"\n\n【Hành động cụ thể】"
-        f"\n\n1. Thiết lập thói quen sinh hoạt: Đặt giờ ngủ và dậy cố định, dù cuối tuần cũng尽量 giữ nguyên."
+        f"\n\n1. Thiết lập thói quen sinh hoạt: Đặt giờ ngủ và dậy cố định, dù cuối tuần cũng cố gắng giữ nguyên."
         f"\n\n2. Nghỉ giải lao khi làm việc: Mỗi tiếng đứng dậy hoạt động 5 phút. Tập kéo giãn, nhìn xa."
         f"\n\n3. Bài tập thở: Khi cảm thấy áp lực, thử bài thở 4-7-8 (hít vào 4 giây, giữ 7 giây, thở ra 8 giây), lặp lại 3-5 lần."
         f"\n\n4. Giao tiếp và sức khỏe: Tập thể thao cùng bạn bè dễ hơn tập một mình. Tìm bạn tập hoặc nhóm thể thao."
-        f"\n\n5. Dưỡng sinh Đông y: Theo卦象, giai đoạn này phù hợp dưỡng tạng phủ liên quan đến '{focus_kin}'. Có thể tham khảo bác sĩ Đông y để了解 phương pháp cụ thể.",
+        f"\n\n5. Dưỡng sinh Đông y: Theo quẻ, giai đoạn này phù hợp dưỡng tạng phủ liên quan đến '{focus_kin}'. Có thể tham khảo bác sĩ Đông y để tìm hiểu phương pháp cụ thể.",
         f"\n\n【구체적인 행동 조언】"
         f"\n\n1. 생활 리듬 확립: 정해진 기상/취침 시간을 설정하고 주말에도 가능한 한 유지하세요."
         f"\n\n2. 작업 중 휴식: 1시간마다 일어나서 5분 움직이세요. 스트레칭을 하거나 먼 곳을 바라보세요."
         f"\n\n3. 호흡 연습: 스트레스를 느낄 때 4-7-8 호흡법(들이마시기 4초, 멈추기 7초, 내쉬기 8초)을 3-5번 반복해보세요."
         f"\n\n4. 사회적 건강: 친구와 함께 운동하는 것이 혼자 하는 것보다 쉽습니다. 운동 파트너나 그룹을 찾아보세요."
-        f"\n\n5. 한의학 양생:卦象에 따르면 '{focus_kin}'과 관련된 장기를 기르기에 좋은 시기입니다. 한의사에게 구체적인 조언을 구해보세요.",
+        f"\n\n5. 한의학 양생:괘에 따르면 '{focus_kin}'과 관련된 장기를 기르기에 좋은 시기입니다. 한의사에게 구체적인 조언을 구해보세요.",
         f"\n\n【လက်တွေ့လုပ်ဆောင်ရန် အကြံပြုချက်များ】"
         f"\n\n၁။ နေထိုင်မှုပုံစံ သတ်မှတ်ပါ — အိပ်ရောက်ချိန်နှင့် နိုးထချိန်ကို သတ်မှတ်ပြီး စနေ/တနင်္ဂနွေတွင်ပါ တတ်နိုင်သမျှ ထိန်းသိမ်းပါ။"
         f"\n၂။ အလုပ်ခွင်အနား — နာရီတိုင်း မတ်တပ်ရပ်ပြီး မိနစ် ၅ ခန့် လှုပ်ရှားပါ။ ကိုယ်လက်ဆန့်ကျင်လေ့ကျင့်ခြင်း၊ အဝေးကြည့်ခြင်း လုပ်ပါ။"
@@ -1654,20 +1755,20 @@ def build_analysis(lines, moving, liuchin, hex_code):
         f"\n\nPeople/travel-wise, '{focus_kin}' affects your social life and travel as follows:"
         f"\n\n• Social circles: Your network may change recently — meeting new people, drifting from others. This is normal social turnover."
         f"\n\n• Workplace relationships: Maintain connections with colleagues and supervisors. When opinions differ, listen fully before expressing yours."
-        f"\n\n• Family: If there's been tension with family, break the ice first. A simple 'thanks for your hard work' or a home-cooked meal works better than道理."
+        f"\n\n• Family: If there's been tension with family, break the ice first. A simple 'thanks for your hard work' or a home-cooked meal works better than reasoning."
         f"\n\n• Travel safety: Stick to familiar routes and transport recently. Research unfamiliar destinations in advance. If driving, follow traffic rules and avoid fatigue driving."
-        f"\n\n• Social events: At gatherings, listen more than you speak. Observe who's sincere and who's superficial. True friends don't require you to刻意 please them.",
-        f"\n\nVề人际/đi lại, '{focus_kin}' ảnh hưởng đến giao tiếp và đi lại của bạn như sau:"
+        f"\n\n• Social events: At gatherings, listen more than you speak. Observe who's sincere and who's superficial. True friends don't require you to go out of your way to please them.",
+        f"\n\nVề quan hệ/đi lại, '{focus_kin}' ảnh hưởng đến giao tiếp và đi lại của bạn như sau:"
         f"\n\n• Mạng lưới xã hội: Vòng tròn quan hệ có thể thay đổi — quen người mới, xa dần người khác. Đây là sự thay thế xã hội bình thường."
-        f"\n\n• Quan hệ công sở: Duy trì mối quan hệ với đồng nghiệp, cấp trên. Khi bất đồng, nghe hết rồi mới表达 quan điểm."
-        f"\n\n• Quan hệ gia đình: Nếu gần đây có mâu thuẫn với gia đình, hãy chủ động phá vỡ bế tắc. Một câu「vất vả rồi」或一顿 cơm nhà hiệu quả hơn nhiều so với讲道理."
-        f"\n\n• An toàn đi lại: Giai đoạn này nên chọn tuyến đường và phương tiện quen thuộc. Đi nơi陌生 thì tìm hiểu trước. Lái xe tuân thủ luật giao thông, tránh lái xe mệt mỏi."
+        f"\n\n• Quan hệ công sở: Duy trì mối quan hệ với đồng nghiệp, cấp trên. Khi bất đồng, nghe hết rồi mới diễn đạt quan điểm."
+        f"\n\n• Quan hệ gia đình: Nếu gần đây có mâu thuẫn với gia đình, hãy chủ động phá vỡ bế tắc. Một câu「vất vả rồi」hoặc một bữa cơm nhà hiệu quả hơn nhiều so với nói lý."
+        f"\n\n• An toàn đi lại: Giai đoạn này nên chọn tuyến đường và phương tiện quen thuộc. Đi nơi lạ thì tìm hiểu trước. Lái xe tuân thủ luật giao thông, tránh lái xe mệt mỏi."
         f"\n\n• Giao lưu xã hội: Khi tham dự tiệc hoặc sự kiện, nghe nhiều nói ít. Quan sát ai chân thành, ai hời hợt. Bạn bè thật sự không cần bạn cố gắng lấy lòng.",
-        f"\n\n인간관계/出行 면에서 '{focus_kin}'이 당신의 사교와出行에 다음과 같은 영향을 줍니다:"
+        f"\n\n인간관계/여행 면에서 '{focus_kin}'이 당신의 사교와여행에 다음과 같은 영향을 줍니다:"
         f"\n\n• 사교 관계: 최근 교제 범위에 변화가 있을 수 있습니다 — 새로운 사람을 만나거나, 특정 사람과 멀어지는 것. 이는 정상적인 사교 교체입니다."
         f"\n\n• 직장 관계: 동료, 상사와의 관계를 의식적으로 유지하세요. 의견이 다를 때는 먼저 상대의 말을 끝까지 듣고 자신의 의견을 표현하세요."
-        f"\n\n• 가족 관계: 최근 가족과 갈등이 있었다면 먼저 얼어붙은 관계를 깨세요. \"수고했어\"라는 말이나 집밥 한 끼가道理를 설명하는 것보다 효과적입니다."
-        f"\n\n•出行 안전: 최근에는 익숙한 경로와 교통수단이 좋습니다. 낯선 곳에 갈 때는 미리 조사하세요. 운전자는 교통 규칙을 준수하고 피곤한 상태로 운전하지 마세요."
+        f"\n\n• 가족 관계: 최근 가족과 갈등이 있었다면 먼저 얼어붙은 관계를 깨세요. \"수고했어\"라는 말이나 집밥 한 끼가이치를 설명하는 것보다 효과적입니다."
+        f"\n\n• 여행 안전: 최근에는 익숙한 경로와 교통수단이 좋습니다. 낯선 곳에 갈 때는 미리 조사하세요. 운전자는 교통 규칙을 준수하고 피곤한 상태로 운전하지 마세요."
         f"\n\n• 사교 행사: 모임이나 행사에서는 많이 듣고 적게 말하세요. 누가 진실되고 누가 겉치레인지 관찰하세요. 진정한 친구는 당신이 아첨할 필요가 없습니다.",
         f"\n\nလူမှုဆက်ဆံရေး/ခရီးသွားခြင်းနှင့်ပတ်သက်၍ '{focus_kin}'သည် သင့်လူမှုဆက်ဆံရေးနှင့် ခရီးသွားခြင်းကို အောက်ပါအတိုင်း သက်ရောက်ပါသည် —"
         f"\n\n• လူမှုဆက်ဆံရေး — မကြာသေးခင်က သင့်လူမှုဆက်ဆံရေးအသိုက်အဝန်းတွင် ပြောင်းလဲမှုများ ရှိနိုင်ပါသည် — အသစ်သောမိတ်ဆွေများနှင့် တွေ့နိုင်သလို အချို့သောသူများနှင့် ဝေးကွာသွားနိုင်ပါသည်။ ဒါသည် ပုံမှန်လူမှုဆက်ဆံရေး အပြောင်းအလဲဖြစ်ပြီး အလွန်စိတ်ပူစရာ မလိုပါ။"
@@ -1694,15 +1795,15 @@ def build_analysis(lines, moving, liuchin, hex_code):
         f"\n\n• People to distance from: If a relationship drains you, makes you tired, or feels disrespected, keeping appropriate distance isn't cold — it's self-protection."
         f"\n\n• Auspicious travel: If you have travel plans, depart on days with good weather and mood. Stay flexible during travel — don't cling too tightly to original plans."
         f"\n\n• Mentor direction: Your mentor may appear in a setting related to '{focus_kin}'. Pay attention to people and events in this direction.",
-        f"\n\n人际/出行 tương lai:"
+        f"\n\nĐi lại tương lai:"
         f"\n\n• Cơ hội xã hội: Trong 1-3 tháng tới, bạn có thể gặp người cùng chí hướng qua công việc, học tập hoặc sở thích. Giữ thái độ mở, chủ động giao tiếp."
-        f"\n\n• Người nên xa: Nếu mối quan hệ nào đó khiến bạn cảm thấy kiệt sức, mệt mỏi hoặc không được tôn trọng, giữ khoảng cách适当 không phải lạnh nhạt mà là tự bảo vệ."
+        f"\n\n• Người nên xa: Nếu mối quan hệ nào đó khiến bạn cảm thấy kiệt sức, mệt mỏi hoặc không được tôn trọng, giữ khoảng cách phù hợp không phải lạnh nhạt mà là tự bảo vệ."
         f"\n\n• Ngày đi lại tốt: Nếu có kế hoạch đi lại, xuất phát vào ngày thời tiết tốt và tâm trạng vui. Khi đi du lịch giữ sự linh hoạt, đừng bám quá chặt vào kế hoạch gốc."
         f"\n\n• Hướng quý nhân: Gần đây quý nhân có thể xuất hiện ở「{focus_kin}」liên quan đến phương hướng hoặc hoàn cảnh. Chú ý đến con người và sự việc ở hướng này.",
-        f"\n\n인간관계/出行 미래 흐름:"
+        f"\n\n인간관계/여행 미래 흐름:"
         f"\n\n• 사교 기회: 향후 1-3개월 내에 업무, 학습, 취미 활동을 통해 뜻이 같은 사람을 만날 수 있습니다. 열린 자세로 적극적으로 소통하세요."
         f"\n\n• 멀리해야 할 사람: 어떤 관계가 소진감, 피로감, 존중받지 못하는 느낌을 준다면 적절한 거리를 두는 것은 냉담함이 아니라 자기 보호입니다."
-        f"\n\n•出行 길일: 여행 계획이 있다면 날씨가 좋고 기분이 좋은 날에 출발하세요. 여행 중에는 유연하게, 원래 계획대로 되지 않는 것도 받아들이세요."
+        f"\n\n• 여행 길일: 여행 계획이 있다면 날씨가 좋고 기분이 좋은 날에 출발하세요. 여행 중에는 유연하게, 원래 계획대로 되지 않는 것도 받아들이세요."
         f"\n\n• 귀인 방향: 가까운 시일에 귀인이 '{focus_kin}'과 관련된 방향이나 상황에 나타날 수 있습니다. 이 방향의 사람과 일에 관심을 기울이세요.",
         f"\n\nလူမှုဆက်ဆံရေး/ခရီးသွားခြင်း အနာဂတ်လမ်းကြောင်း —"
         f"\n\n• လူမှုဆက်ဆံရေးအခွင့်အရေး — နောက်လပေါင်း ၁-၃ အတွင်း အလုပ်၊ ပညာရေး သို့မဟုတ် ဝါသနာလုပ်ဆောင်ချက်များမှတစ်ဆင့် တူညီသည့် စိတ်ကူးရှိသူများကို တွေ့နိုင်ပါသည်။ ဖွင့်ထားသည့် စိတ်ဓာတ်ဖြင့် တက်ကြွစွာ ဆက်သွယ်ပါ။"
@@ -1740,7 +1841,7 @@ def build_analysis(lines, moving, liuchin, hex_code):
         f"\n\n1. 얼음 깨기: 누군가와 오해가 있다면 먼저 메시지나 전화를 하세요. 대부분의 갈등은 소통 부족에서 비롯됩니다."
         f"\n\n2. 진정한 칭찬: 상대의 장점을 발견하고 진심으로 말하세요. 구체적인 칭찬(\"오늘 제안이 정말 좋았어\")이 일반적인 칭찬(\"대단해\")보다 마음에 와닿습니다."
         f"\n\n3. 거절하는 법 배우기: 가고 싶지 않은 모임, 부당한 요구는 정중하지만 단호하게 거절하세요. 당신의 시간과 에너지는 한정된 자원입니다."
-        f"\n\n4.出行 준비: 장거리 여행 전에 서류 확인, 숙소 예약, 현지 날씨와 문화 조사를 미리 하세요. 상비약도 챙기세요."
+        f"\n\n4.여행 준비: 장거리 여행 전에 서류 확인, 숙소 예약, 현지 날씨와 문화 조사를 미리 하세요. 상비약도 챙기세요."
         f"\n\n5. 아름다운 기록: 여행이나 모임에서 사진을 찍거나 일기를 쓰세요. 이 기록들은 미래에 아름다운 추억이 됩니다.",
         f"\n\n【လက်တွေ့လုပ်ဆောင်ရန် အကြံပြုချက်များ】"
         f"\n\n၁။ တက်ကြွစွာ ရုတ်သိမ်းပါ — မည်သူ့နှင့်မဆို နားလည်မှုလွဲနေပါက မက်ဆေ့ချ်တစ်စောင် သို့မဟုတ် ဖုန်းခေါ်ပါ။ ပဋိပက္ခအများစုသည် ဆက်သွယ်ရေးမလုံလောက်ခြင်းမှ ဖြစ်ပေါ်လာခြင်းဖြစ်သည်။"
@@ -1770,7 +1871,17 @@ def build_analysis(lines, moving, liuchin, hex_code):
 def index():
     lang = request.args.get("lang")
     if not lang or lang not in LANGS:
-        return render_template("welcome.html", lang="en", guide_texts=TEXTS["welcome_texts"]["en"], lang_selected=False)
+        lang_options = [
+            ("zh", "Chinese", "\u4e2d\u6587", "\U0001F1E8\U0001F1F3"),
+            ("ja", "Japanese", "\u65e5\u672c\u8a9e", "\U0001F1EF\U0001F1F5"),
+            ("en", "English", "English", "\U0001F1FA\U0001F1F8"),
+            ("vi", "Vietnamese", "Ti\u1ebfng Vi\u1ec7t", "\U0001F1FB\U0001F1F3"),
+            ("ko", "Korean", "\ud55c\uad6d\uc5b4", "\U0001F1F0\U0001F1F7"),
+            ("my", "Myanmar", "\u1019\u103c\u1014\u103a\u1019\u102c\u1018\u102c", "\U0001F1F2\U0001F1F2"),
+        ]
+        return render_template("welcome.html", lang="en", t=TEXTS["en"], wt=TEXTS["welcome_texts"]["en"],
+                               welcome_json=json.dumps(TEXTS["welcome_texts"]), lang_options=lang_options,
+                               lang_urls={code: url_for("index", lang=code) for code in LANGS})
     t = TEXTS.get(lang, TEXTS["zh"])
     lang_urls = {code: url_for("index", lang=code) for code in LANGS}
     daily = get_daily_fortune(lang)
@@ -1779,17 +1890,40 @@ def index():
 
 @app.route("/welcome")
 def welcome():
-    # 显示语言选择页面
-    guide_texts = TEXTS["welcome_texts"]["en"]
-    return render_template("welcome.html", lang="en", guide_texts=guide_texts, lang_selected=False)
+    lang_options = [
+        ("zh", "Chinese", "\u4e2d\u6587", "\U0001F1E8\U0001F1F3"),
+        ("ja", "Japanese", "\u65e5\u672c\u8a9e", "\U0001F1EF\U0001F1F5"),
+        ("en", "English", "English", "\U0001F1FA\U0001F1F8"),
+        ("vi", "Vietnamese", "Ti\u1ebfng Vi\u1ec7t", "\U0001F1FB\U0001F1F3"),
+        ("ko", "Korean", "\ud55c\uad6d\uc5b4", "\U0001F1F0\U0001F1F7"),
+        ("my", "Myanmar", "\u1019\u103c\u1014\u103a\u1019\u102c\u1018\u102c", "\U0001F1F2\U0001F1F2"),
+    ]
+    t = TEXTS["en"]
+    wt = TEXTS["welcome_texts"]["en"]
+    lang_urls = {code: url_for("index", lang=code) for code in LANGS}
+    return render_template("welcome.html", lang="en", t=t, wt=wt,
+                           welcome_json=json.dumps(TEXTS["welcome_texts"]),
+                           lang_options=lang_options, lang_urls=lang_urls)
 
 
 @app.route("/welcome/<lang>")
 def welcome_guide(lang):
     if lang not in LANGS:
         lang = "zh"
-    guide_texts = TEXTS["welcome_texts"][lang]
-    return render_template("welcome.html", lang=lang, guide_texts=guide_texts, lang_selected=True)
+    lang_options = [
+        ("zh", "Chinese", "\u4e2d\u6587", "\U0001F1E8\U0001F1F3"),
+        ("ja", "Japanese", "\u65e5\u672c\u8a9e", "\U0001F1EF\U0001F1F5"),
+        ("en", "English", "English", "\U0001F1FA\U0001F1F8"),
+        ("vi", "Vietnamese", "Ti\u1ebfng Vi\u1ec7t", "\U0001F1FB\U0001F1F3"),
+        ("ko", "Korean", "\ud55c\uad6d\uc5b4", "\U0001F1F0\U0001F1F7"),
+        ("my", "Myanmar", "\u1019\u103c\u1014\u103a\u1019\u102c\u1018\u102c", "\U0001F1F2\U0001F1F2"),
+    ]
+    t = TEXTS.get(lang, TEXTS["en"])
+    wt = TEXTS["welcome_texts"].get(lang, TEXTS["welcome_texts"]["en"])
+    lang_urls = {code: url_for("index", lang=code) for code in LANGS}
+    return render_template("welcome.html", lang=lang, t=t, wt=wt,
+                           welcome_json=json.dumps(TEXTS["welcome_texts"]),
+                           lang_options=lang_options, lang_urls=lang_urls)
 
 
 @app.route("/result", methods=["POST"])
@@ -1814,45 +1948,44 @@ def result():
             number_val = 0
 
     lines, moving = make_lines(method, number_val)
-    liuchin = calc_liuchin(lines)
+    liuchin = calc_liuchin(lines, lang)
     hex_code = lines_to_code(lines)
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Check for duplicate question within 5 minutes
     dup_warning = ""
     if question:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT id, created_at FROM history WHERE question=? AND created_at > datetime('now', '-5 minutes') ORDER BY id DESC LIMIT 1",
-            (question,),
-        )
-        dup = cur.fetchone()
-        conn.close()
+        with db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, created_at FROM history WHERE question=? AND created_at > datetime('now', '-5 minutes') ORDER BY id DESC LIMIT 1",
+                (question,),
+            )
+            dup = cur.fetchone()
         if dup:
             dup_warning = {"zh": "你刚才已经就同一问题占过一卦（5分钟内），建议静心后再问。", "ja": "5分前に同じ質問で占いました。落ち着いてから再度占いましょう。", "en": "You already asked the same question within 5 minutes. Take a moment before asking again.", "vi": "Bạn vừa hỏi cùng câu hỏi trong vòng 5 phút. Hãy bình tâm trước khi hỏi lại.", "ko": "5분 안에 같은 질문으로 점을 보셨습니다. 차분해진 후 다시 보세요.", "my": "သင်သည် ၅ မိနစ်အတွင်း မေးခွန်းတူညီမှုကို ထပ်မံမေးပြီးဖြစ်ပါသည်။ ငြိမ်သက်စွာ စဉ်းစားပြီးမှ ထပ်မံမေးပါ။"}.get(lang, "")
 
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        INSERT INTO history (method, question, category, hex_code, lines, moving, liuchin, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            method,
-            question,
-            category,
-            hex_code,
-            json.dumps(lines, ensure_ascii=False),
-            json.dumps(moving, ensure_ascii=False),
-            json.dumps(liuchin, ensure_ascii=False),
-            created_at,
-        ),
-    )
-    hid = cur.lastrowid
-    conn.commit()
-    conn.close()
+    with db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO history (method, question, category, hex_code, lines, moving, liuchin, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                method,
+                question,
+                category,
+                hex_code,
+                json.dumps(lines, ensure_ascii=False),
+                json.dumps(moving, ensure_ascii=False),
+                json.dumps(liuchin, ensure_ascii=False),
+                created_at,
+            ),
+        )
+        hid = cur.lastrowid
+        conn.commit()
+    logger.info("New divination: id=%d method=%s category=%s hex=%d", hid, method, category, hex_code)
 
     return redirect(url_for("view", hid=hid, lang=lang))
 
@@ -1864,27 +1997,26 @@ def history():
     query = sanitize_input(request.args.get("q", ""), 100)
     time_range = request.args.get("time", "")
 
-    conn = get_db()
-    cur = conn.cursor()
-    conditions = []
-    params = []
+    with db_connection() as conn:
+        cur = conn.cursor()
+        conditions = []
+        params = []
 
-    if query:
-        safe_query = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        conditions.append("(question LIKE ? ESCAPE '\\' OR hex_code LIKE ? ESCAPE '\\')")
-        params.extend([f"%{safe_query}%", f"%{safe_query}%"])
+        if query:
+            safe_query = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            conditions.append("(question LIKE ? ESCAPE '\\' OR hex_code LIKE ? ESCAPE '\\')")
+            params.extend([f"%{safe_query}%", f"%{safe_query}%"])
 
-    if time_range == "today":
-        conditions.append("DATE(created_at) = DATE('now')")
-    elif time_range == "week":
-        conditions.append("created_at >= DATE('now', '-7 days')")
-    elif time_range == "month":
-        conditions.append("created_at >= DATE('now', '-30 days')")
+        if time_range == "today":
+            conditions.append("DATE(created_at) = DATE('now')")
+        elif time_range == "week":
+            conditions.append("created_at >= DATE('now', '-7 days')")
+        elif time_range == "month":
+            conditions.append("created_at >= DATE('now', '-30 days')")
 
-    where = " WHERE " + " AND ".join(conditions) if conditions else ""
-    cur.execute(f"SELECT id, method, question, hex_code, created_at FROM history{where} ORDER BY id DESC", params)
-    rows = cur.fetchall()
-    conn.close()
+        where = " WHERE " + " AND ".join(conditions) if conditions else ""
+        cur.execute(f"SELECT id, method, question, hex_code, created_at FROM history{where} ORDER BY id DESC", params)
+        rows = cur.fetchall()
 
     lang_urls = {code: url_for("history", lang=code) for code in LANGS}
     hex_names = {}
@@ -1899,20 +2031,18 @@ def view(hid):
     lang = get_lang()
     t = TEXTS[lang]
 
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT id, method, question, category, hex_code, lines, moving, liuchin, starred, created_at FROM history WHERE id=?",
-        (hid,),
-    )
-    row = cur.fetchone()
-    conn.close()
+    with db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, method, question, category, hex_code, lines, moving, liuchin, starred, created_at FROM history WHERE id=?",
+            (hid,),
+        )
+        row = cur.fetchone()
 
     if not row:
         t = TEXTS.get(lang, TEXTS["zh"])
-        msgs = {"zh": "记录未找到", "ja": "記録が見つかりません", "en": "Record Not Found", "vi": "Không tìm thấy bản ghi", "ko": "기록을 찾을 수 없습니다", "my": "မှတ်တမ်း ရှာမတွေ့ပါ"}
         lang_urls = {code: url_for("view", hid=hid, lang=code) for code in LANGS}
-        return render_template("error.html", lang=lang, t=t, lang_urls=lang_urls, code=404, message=msgs.get(lang, "Not Found")), 404
+        return render_template("error.html", lang=lang, t=t, lang_urls=lang_urls, code=404, message=t.get("error_record_not_found", "Record Not Found")), 404
 
     _, method, question, category, hex_code, lines_json, moving_json, liuchin_json, starred, created_at = row
 
@@ -1929,7 +2059,7 @@ def view(hid):
     try:
         liuchin = json.loads(liuchin_json)
     except Exception:
-        liuchin = calc_liuchin(lines)
+        liuchin = calc_liuchin(lines, lang)
 
     analysis = build_analysis(lines, moving, liuchin, hex_code)
     hex_no = hex_code + 1
@@ -2002,15 +2132,14 @@ def view(hid):
 
 @app.route("/star/<int:hid>", methods=["POST"])
 def star(hid):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT starred FROM history WHERE id=?", (hid,))
-    row = cur.fetchone()
-    if row:
-        new_val = 0 if row[0] else 1
-        cur.execute("UPDATE history SET starred=? WHERE id=?", (new_val, hid))
-        conn.commit()
-    conn.close()
+    with db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT starred FROM history WHERE id=?", (hid,))
+        row = cur.fetchone()
+        if row:
+            new_val = 0 if row[0] else 1
+            cur.execute("UPDATE history SET starred=? WHERE id=?", (new_val, hid))
+            conn.commit()
     lang = request.form.get("lang", "zh")
     return redirect(url_for("view", hid=hid, lang=lang))
 
@@ -2018,24 +2147,57 @@ def star(hid):
 @app.route("/random")
 def random_hex():
     lang = get_lang()
+    t = TEXTS.get(lang, TEXTS["zh"])
     lines, moving = make_lines("coin", None)
-    liuchin = calc_liuchin(lines)
+    liuchin = calc_liuchin(lines, lang)
     hex_code = lines_to_code(lines)
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO history (method, question, category, hex_code, lines, moving, liuchin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        ("coin", {"zh": "随机一卦 · 今日运势", "ja": "ラッキー占い · 今日の運勢", "en": "Quick Cast · Daily Fortune", "vi": "Bói nhanh · Vận hôm nay", "ko": "빠른 점 · 오늘의 운세", "my": "မြန်မြန်ဆန်ဆန် · ယနေ့ ကံကြမ္မာ"}.get(lang, "Quick Cast"), "random", hex_code,
-         json.dumps(lines, ensure_ascii=False),
-         json.dumps(moving, ensure_ascii=False),
-         json.dumps(liuchin, ensure_ascii=False),
-         created_at),
-    )
-    hid = cur.lastrowid
-    conn.commit()
-    conn.close()
+    with db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO history (method, question, category, hex_code, lines, moving, liuchin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("coin", t.get("random_question", "Quick Cast"), "random", hex_code,
+             json.dumps(lines, ensure_ascii=False),
+             json.dumps(moving, ensure_ascii=False),
+             json.dumps(liuchin, ensure_ascii=False),
+             created_at),
+        )
+        hid = cur.lastrowid
+        conn.commit()
+    logger.info("Quick cast: id=%d hex=%d", hid, hex_code)
+    return redirect(url_for("view", hid=hid, lang=lang))
+
+
+@app.route("/cast/<int:hex_code>")
+def cast_hex(hex_code):
+    lang = get_lang()
+    t = TEXTS.get(lang, TEXTS["zh"])
+
+    if hex_code < 0 or hex_code > 63:
+        hex_code = random.randint(0, 63)
+
+    interp = INTERPRETATIONS.get(hex_code, {})
+    lines = []
+    for i in range(6):
+        lines.append((hex_code >> i) & 1)
+
+    liuchin = calc_liuchin(lines, lang)
+    moving = []
+    created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    with db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO history (method, question, category, hex_code, lines, moving, liuchin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("gallery", t.get("nav_gallery", "Hexagram Atlas"), "general", hex_code,
+             json.dumps(lines, ensure_ascii=False),
+             json.dumps(moving, ensure_ascii=False),
+             json.dumps(liuchin, ensure_ascii=False),
+             created_at),
+        )
+        hid = cur.lastrowid
+        conn.commit()
     return redirect(url_for("view", hid=hid, lang=lang))
 
 
@@ -2056,34 +2218,32 @@ def gallery():
 def stats():
     lang = get_lang()
     t = TEXTS.get(lang, TEXTS["zh"])
-    conn = get_db()
-    cur = conn.cursor()
+    with db_connection() as conn:
+        cur = conn.cursor()
 
-    # Total count
-    cur.execute("SELECT COUNT(*) FROM history")
-    total = cur.fetchone()[0]
+        # Total count
+        cur.execute("SELECT COUNT(*) FROM history")
+        total = cur.fetchone()[0]
 
-    # Hexagram distribution
-    cur.execute("SELECT hex_code, COUNT(*) as cnt FROM history GROUP BY hex_code ORDER BY cnt DESC")
-    hex_dist = cur.fetchall()
+        # Hexagram distribution
+        cur.execute("SELECT hex_code, COUNT(*) as cnt FROM history GROUP BY hex_code ORDER BY cnt DESC")
+        hex_dist = cur.fetchall()
 
-    # Category distribution
-    cur.execute("SELECT category, COUNT(*) as cnt FROM history WHERE category != '' GROUP BY category ORDER BY cnt DESC")
-    cat_dist = cur.fetchall()
+        # Category distribution
+        cur.execute("SELECT category, COUNT(*) as cnt FROM history WHERE category != '' GROUP BY category ORDER BY cnt DESC")
+        cat_dist = cur.fetchall()
 
-    # Method distribution
-    cur.execute("SELECT method, COUNT(*) as cnt FROM history GROUP BY method ORDER BY cnt DESC")
-    method_dist = cur.fetchall()
+        # Method distribution
+        cur.execute("SELECT method, COUNT(*) as cnt FROM history GROUP BY method ORDER BY cnt DESC")
+        method_dist = cur.fetchall()
 
-    # Starred count
-    cur.execute("SELECT COUNT(*) FROM history WHERE starred=1")
-    starred_count = cur.fetchone()[0]
+        # Starred count
+        cur.execute("SELECT COUNT(*) FROM history WHERE starred=1")
+        starred_count = cur.fetchone()[0]
 
-    # Recent activity (last 7 days)
-    cur.execute("SELECT DATE(created_at) as day, COUNT(*) FROM history WHERE created_at >= DATE('now', '-7 days') GROUP BY day ORDER BY day")
-    recent = cur.fetchall()
-
-    conn.close()
+        # Recent activity (last 7 days)
+        cur.execute("SELECT DATE(created_at) as day, COUNT(*) FROM history WHERE created_at >= DATE('now', '-7 days') GROUP BY day ORDER BY day")
+        recent = cur.fetchall()
 
     # Map codes to names
     hex_names = {}
@@ -2096,7 +2256,7 @@ def stats():
         "general": t.get("cat_general", "General"), "love": t.get("cat_love", "Love"),
         "career": t.get("cat_career", "Career"), "wealth": t.get("cat_wealth", "Wealth"),
         "health": t.get("cat_health", "Health"), "people": t.get("cat_people", "People"),
-        "random": "Random",
+        "random": t.get("cat_random", "Random"),
     }
 
     lang_urls = {code: url_for("stats", lang=code) for code in LANGS}
@@ -2112,24 +2272,23 @@ def stats():
 def starred():
     lang = get_lang()
     t = TEXTS.get(lang, TEXTS["zh"])
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id, method, question, hex_code, created_at FROM history WHERE starred=1 ORDER BY id DESC")
-    rows = cur.fetchall()
-    conn.close()
+    with db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id, method, question, hex_code, created_at FROM history WHERE starred=1 ORDER BY id DESC")
+        rows = cur.fetchall()
     lang_urls = {code: url_for("starred", lang=code) for code in LANGS}
     hex_names = {}
     for code in range(64):
         name = get_hex_name(code)
         hex_names[code] = name.get(lang, name.get("en", str(code+1)))
-    return render_template("history.html", lang=lang, t=t, rows=rows, lang_urls=lang_urls, title_override=t.get("nav_starred", "收藏记录"), hex_names=hex_names)
+    return render_template("history.html", lang=lang, t=t, rows=rows, lang_urls=lang_urls, title_override=t.get("nav_starred", "收藏记录"), hex_names=hex_names, time_range="")
 
 
 if __name__ == "__main__":
     import sys, io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-    print("初始化数据库 sixyao2.db ...")
+    print("Initializing database sixyao2.db ...")
     init_db()
     migrate_db()
-    print("启动: http://127.0.0.1:8888")
+    print("Starting: http://127.0.0.1:8888")
     app.run(debug=True, host="127.0.0.1", port=8888)

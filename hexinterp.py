@@ -219,18 +219,18 @@ _HEX_DATA = {
         "Bi relates to grace and decoration. Don't sacrifice substance for style. Balance inner content with outer beauty.",
         "Quẻ Bí tượng trưng trang sức. Đừng bỏ qua thực chất. Cần cân bằng nội dung và hình thức.",
         "비卦는 장식과 문채를 상징합니다. 내실을 소홀히 하지 마세요. 내용과 형식을 모두 갖추세요."),
-    22: ("山地剥","山地剥","Bo: Splitting Apart","Bác: Phá vỡ","박: 무너짐",
+    22: ("风雷益","風雷益","Yi: Increase","D lợi: Tăng trưởng","익: 이로움",
+        "益卦象征增益和进步。这是一个非常吉利的卦象，适合大胆行动、推进计划。付出和回报都会增长。",
+        "益卦は増益と進歩の象徴です。非常に吉卦であり、大胆に行動し、計画を進めるのに適しています。",
+        "Yi means increase — a very auspicious hexagram. Act boldly, push plans forward. Both giving and receiving grow.",
+        "Quẻ D lợi tượng trưng tăng trưởng. Rất cát, phù hợp hành động táo bạo. Cả cho và nhận đều tăng.",
+        "익卦는 증益과 진보를 상징합니다. 매우 길한 괘로 대담하게 행동하고 계획을 추진하기에 적합합니다."),
+    23: ("山地剥","山地剥","Bo: Splitting Apart","Bác: Phá vỡ","박: 무너짐",
         "剥卦象征剥落和衰退。不宜做大的行动或决定，应该韬光养晦、保存实力。等到底部稳了自然会重新生长。",
         "剥卦は剥離と衰退の象徴です。大きな行動や決定を控え、力を蓄えるべきです。",
         "Bo signals decline. Don't make big moves now — conserve your strength. Once the base stabilises, growth returns.",
         "Quẻ Bác tượng trưng sự suy tàn. Đừng hành động lớn, nên ẩn dật chờ thời.",
         "박卦는 파열과 쇠퇴을 상징합니다. 큰 행동을 자제하고 힘을 비축하세요."),
-    23: ("地雷复","地雷復","Fu: Return","Phục: Phục hồi","복: 돌아옴",
-        "复卦象征回归和重生。经历低谷后即将迎来新的开始。就像冬至之后白昼渐长，阳气开始恢复。抓住转机，积极行动。",
-        "復卦は回帰と再生を象徴します。低谷を経て、新たな始まりが近づいています。",
-        "Fu represents return and renewal. After the low point, a new beginning is near. Seize this turning point.",
-        "Quẻ Phục tượng trưng sự phục hồi. Sau giai đoạn thấp, bắt đầu mới đang đến. Nắm bắt cơ hội.",
-        "복卦는 돌아옴과 재생을 상징합니다. 저점을 지난 후 새로운 시작이 다가오고 있습니다."),
     24: ("地雷复","地雷復","Fu: Return","Phục: Phục hồi","복: 돌아옴",
         "复卦象征回归和重生。在经历了低谷之后，你即将迎来新的开始。抓住这个转机，积极行动起来。",
         "復卦は回帰と再生を象徴します。低谷を経て、新たな始まりが近づいています。この転機を捉えましょう。",
@@ -444,7 +444,7 @@ _HEX_DATA = {
     59: ("风水涣","風水渙","Huan: Dispersion","Huan: Phân tán","환: 흩어짐",
         "涣卦象征涣散和化解。当前可能感到人心涣散或精力分散。涣卦建议通过精神力量（信仰、文化、共同目标）来重新凝聚人心。",
         "渙卦は涣散と化解の象徴です。人心が離れたりエネルギーが分散したりしているかもしれません。精神的な力で再凝集しましょう。",
-        "Huan means dispersion. People may feel scattered. Reunite through spiritual力量 — shared beliefs, culture, common goals.",
+        "Huan means dispersion. People may feel scattered. Reunite through spiritual strength — shared beliefs, culture, common goals.",
         "Quẻ Huan tượng trưng sự phân tán. Mọi người có thể cảm thấy phân tâm. Tái凝聚 bằng sức mạnh tinh thần.",
         "환卦는 흩어짐과 해소를 상징합니다. 사람들이 흩어지거나 에너지가 분산될 수 있습니다. 정신력으로 다시 결집하세요."),
     60: ("水泽节","水沢節","Jie: Limitation","Tiết: Tiết chế","절: 절제",
@@ -772,7 +772,7 @@ _FORTUNE_EN = {
          "Travel safely and avoid long trips. Seek help socially — don't shoulder everything alone."),
     40: ("Relationship difficulties are dissolving. Previous misunderstandings or coldness will gradually fade, and warmth returns.",
          "Career obstacles are clearing. Previously stalled projects will break through — act quickly.",
-         "Financial困局 is opening up. Payments may arrive and your financial situation improves.",
+         "Financial difficulties are opening up. Payments may arrive and your financial situation improves.",
          "Physical discomfort is improving. Continue care and health will gradually recover.",
          "Social conflicts are resolving. Communicate proactively to repair damaged relationships."),
     41: ("Love requires appropriate giving and sacrifice. Don't keep score — sincere giving brings returns.",
@@ -800,7 +800,7 @@ _FORTUNE_EN = {
          "Social connections may bring good income opportunities through cooperation.",
          "Exercising with friends is more effective. Find a workout buddy for mutual motivation.",
          "Social life is excellent. Join gatherings, clubs, and activities to widen your circle."),
-    46: ("Love grows steadily upward. Like a tree growing, deepening不知不觉 in everyday moments.",
+    46: ("Love grows steadily upward. Like a tree growing, deepening imperceptibly in everyday moments.",
          "Career steadily ascends. Keep going — your abilities are being recognised.",
          "Finances gradually improve. Stick to savings and investment plans; wealth accumulates slowly.",
          "Health steadily improves. Maintain healthy habits and the results become more and more obvious.",
@@ -832,7 +832,7 @@ _FORTUNE_EN = {
          "Unexpected social encounters or conflicts may arise. Stay calm and handle them properly."),
     52: ("Take time to reflect on love before acting. Don't rush — sort out your inner feelings first. Solitude and meditation bring clarity.",
          "Pause the busyness and reflect on direction. Sometimes stopping to think matters more than blind progress.",
-         "冷静 analyse your financial situation. Don't impulse-spend or invest — plan first.",
+         "Calmly analyse your financial situation. Don't impulse-spend or invest — plan first.",
          "Rest and recuperate. Meditation, yoga, and quiet activities suit you now.",
          "Reduce socialising temporarily. Give yourself some quiet, personal space."),
     53: ("Gradual progress is the best love strategy. Don't rush to define the relationship — let it develop naturally.",
@@ -840,7 +840,7 @@ _FORTUNE_EN = {
          "Invest steadily. Stick to your savings plan — don't chase quick riches.",
          "Build healthy habits gradually. Don't change everything at once — take it step by step.",
          "Nurture relationships slowly. Sincerity and time are the best social strategies."),
-    54: ("A new relationship may begin, but see reality clearly. Not every beginning has a perfect ending — stay清醒.",
+    54: ("A new relationship may begin, but see reality clearly. Not every beginning has a perfect ending — stay clear-headed.",
          "New collaborations or projects start, but assess the risks. Don't be dazzled by surface glamour.",
          "New investment opportunities may appear, but evaluate carefully. Don't be tempted by high-return promises.",
          "A new health plan begins execution. Persist and results will gradually show.",
@@ -968,9 +968,11 @@ for code, data in _HEX_DATA.items():
     overall_desc = _titles(*data[5:10])
 
     entry = {"overall": {"title": overall, "desc": overall_desc}}
-    # Ensure Myanmar key exists in overall title
+    # Ensure Myanmar key exists in overall title and desc
     if not overall.get("my"):
         overall["my"] = overall.get("zh", "")
+    if not overall_desc.get("my"):
+        overall_desc["my"] = overall_desc.get("zh", "")
 
     if code in _FORTUNE_ZH:
         fdata_zh = _FORTUNE_ZH[code]
@@ -982,7 +984,7 @@ for code, data in _HEX_DATA.items():
             ja = fallback.get("ja", en)
             vi = fallback.get("vi", en)
             ko = fallback.get("ko", en)
-            my = ""  # No Myanmar fallback; extra text provides it
+            my = fallback.get("my", en) if fallback.get("my") else en  # Use en as Myanmar fallback
             entry[fkey] = {
                 "title": _FORTUNE_TITLES[fkey],
                 "desc": {"zh": zh, "ja": ja, "en": en, "vi": vi, "ko": ko, "my": my},

@@ -1,31 +1,31 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="card">
-  <h1 class="card-title">{{ t.stats_title | default('占卜统计') }}</h1>
+<section class="card tilt-card">
+  <h1 class="card-title">{{ t.stats_title }}</h1>
 
   <!-- Summary Cards -->
-  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 24px 0;">
+  <div class="stats-grid">
     <div style="background: var(--bg-deep); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; text-align: center;">
       <div style="font-size: 32px; font-weight: 700; color: var(--gold); font-family: var(--font-mono);">{{ total }}</div>
-      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">{{ t.stats_total | default('总占卜次数') }}</div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">{{ t.stats_total }}</div>
     </div>
     <div style="background: var(--bg-deep); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; text-align: center;">
       <div style="font-size: 32px; font-weight: 700; color: var(--gold); font-family: var(--font-mono);">{{ starred_count }}</div>
-      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">{{ t.stats_starred | default('收藏次数') }}</div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">{{ t.stats_starred }}</div>
     </div>
     <div style="background: var(--bg-deep); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; text-align: center;">
       <div style="font-size: 32px; font-weight: 700; color: var(--gold); font-family: var(--font-mono);">{{ hex_dist | length }}</div>
-      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">{{ t.stats_diff_hex | default('不同卦象') }}</div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">{{ t.stats_diff_hex }}</div>
     </div>
   </div>
 
   {% if total == 0 %}
-    <p class="empty">{{ t.stats_empty | default('还没有占卜记录，快去占一卦吧！') }}</p>
+    <p class="empty">{{ t.stats_empty }}</p>
   {% else %}
 
-  <!-- Hexagram Distribution -->
-  <h2 class="section-title">{{ t.stats_hex_dist | default('卦象分布') }}</h2>
+  <!-- Hexagram Distribution Bar Chart -->
+  <h2 class="section-title">{{ t.stats_hex_dist }}</h2>
   <div style="margin-bottom: 32px;">
     {% for code, cnt in hex_dist[:10] %}
       <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
@@ -39,49 +39,171 @@
       </div>
     {% endfor %}
     {% if hex_dist | length > 10 %}
-      <div style="font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 8px;">…{{ t.stats_total_diff | default('共') }} {{ hex_dist | length }} {{ t.stats_diff_hex_unit | default('种不同卦象') }}</div>
+      <div style="font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 8px;">…{{ t.stats_total_diff }} {{ hex_dist | length }} {{ t.stats_diff_hex_unit }}</div>
     {% endif %}
   </div>
 
-  <!-- Category Distribution -->
+  <!-- Category Distribution Donut Chart -->
   {% if cat_dist %}
-  <h2 class="section-title">{{ t.stats_cat_dist | default('问题类型分布') }}</h2>
-  <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 32px;">
-    {% for cat, cnt in cat_dist %}
-      <div style="background: var(--bg-deep); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 20px; text-align: center;">
-        <div style="font-size: 20px; font-weight: 600; color: var(--gold); font-family: var(--font-mono);">{{ cnt }}</div>
-        <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">{{ cat_names.get(cat, cat) }}</div>
-      </div>
-    {% endfor %}
+  <h2 class="section-title">{{ t.stats_cat_dist }}</h2>
+  <div style="display: flex; align-items: center; gap: 32px; margin-bottom: 32px; flex-wrap: wrap; justify-content: center;">
+    <canvas id="catChart" width="200" height="200" style="flex-shrink: 0;"></canvas>
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      {% for cat, cnt in cat_dist %}
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 12px; height: 12px; border-radius: 3px; background: var(--gold); opacity: {{ 1 - loop.index0 * 0.15 }};"></div>
+          <span style="font-size: 13px; color: var(--text-secondary);">{{ cat_names.get(cat, cat) }}</span>
+          <span style="font-size: 13px; color: var(--text-muted); font-family: var(--font-mono);">{{ cnt }}</span>
+        </div>
+      {% endfor %}
+    </div>
   </div>
   {% endif %}
 
-  <!-- Method Distribution -->
-  <h2 class="section-title">{{ t.stats_method_dist | default('起卦方式分布') }}</h2>
-  <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 32px;">
+  <!-- Method Distribution Bar Chart -->
+  <h2 class="section-title">{{ t.stats_method_dist }}</h2>
+  <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 32px; justify-content: center;">
     {% for method, cnt in method_dist %}
-      <div style="background: var(--bg-deep); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 20px; text-align: center;">
-        <div style="font-size: 20px; font-weight: 600; color: var(--gold); font-family: var(--font-mono);">{{ cnt }}</div>
-        <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">{{ method_names.get(method, method) }}</div>
+      <div style="background: var(--bg-deep); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px 32px; text-align: center; min-width: 100px;">
+        <div style="font-size: 28px; font-weight: 700; color: var(--gold); font-family: var(--font-mono);">{{ cnt }}</div>
+        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">{{ method_names.get(method, method) }}</div>
+        <div style="height: 4px; background: var(--bg-deep); border-radius: 2px; margin-top: 8px; overflow: hidden;">
+          <div style="height: 100%; background: var(--gold); border-radius: 2px; width: {{ (cnt / total * 100) }}%;"></div>
+        </div>
       </div>
     {% endfor %}
   </div>
 
-  <!-- Recent Activity -->
+  <!-- Recent Activity Line Chart -->
   {% if recent %}
-  <h2 class="section-title">{{ t.stats_recent | default('近期活动') }}</h2>
-  <div style="display: flex; gap: 8px; align-items: flex-end; height: 80px; margin-bottom: 16px;">
-    {% set max_cnt = recent | map(attribute=1) | max %}
+  <h2 class="section-title">{{ t.stats_recent }}</h2>
+  <div style="position: relative; height: 120px; margin-bottom: 8px;">
+    <canvas id="recentChart" style="width: 100%; height: 100%;"></canvas>
+  </div>
+  <div style="display: flex; gap: 4px; justify-content: space-around;">
     {% for day, cnt in recent %}
-      <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
-        <div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">{{ cnt }}</div>
-        <div style="width: 100%; max-width: 40px; background: var(--gold); border-radius: 3px 3px 0 0; height: {{ (cnt / max_cnt * 50) }}px; min-height: 2px;"></div>
-        <div style="font-size: 10px; color: var(--text-muted);">{{ day[-5:] }}</div>
-      </div>
+      <div style="font-size: 10px; color: var(--text-muted); text-align: center; flex: 1;">{{ day[-5:] }}</div>
     {% endfor %}
   </div>
   {% endif %}
 
   {% endif %}
 </section>
+
+<script>
+// Donut chart for categories
+(function() {
+  var canvas = document.getElementById('catChart');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var data = [
+    {% for cat, cnt in cat_dist %}
+      {{ cnt }},
+    {% endfor %}
+  ];
+  var total = data.reduce(function(a, b) { return a + b; }, 0);
+  if (total === 0) return;
+
+  var cx = 100, cy = 100, r = 80, inner = 50;
+  var startAngle = -Math.PI / 2;
+  var colors = ['#c9a84c', '#b89838', '#a08830', '#8a7828', '#746820', '#5e5818', '#484810'];
+
+  for (var i = 0; i < data.length; i++) {
+    var slice = (data[i] / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + inner * Math.cos(startAngle), cy + inner * Math.sin(startAngle));
+    ctx.arc(cx, cy, r, startAngle, startAngle + slice);
+    ctx.arc(cx, cy, inner, startAngle + slice, startAngle, true);
+    ctx.closePath();
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fill();
+    startAngle += slice;
+  }
+
+  // Center text
+  ctx.fillStyle = '#e8dcc8';
+  ctx.font = 'bold 24px system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(total, cx, cy - 8);
+  ctx.font = '11px system-ui';
+  ctx.fillStyle = '#5a4e3c';
+  ctx.fillText('{{ t.stats_total }}', cx, cy + 14);
+})();
+
+// Line chart for recent activity
+(function() {
+  var canvas = document.getElementById('recentChart');
+  if (!canvas) return;
+  var rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * 2;
+  canvas.height = rect.height * 2;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  var ctx = canvas.getContext('2d');
+  ctx.scale(2, 2);
+
+  var data = [
+    {% for day, cnt in recent %}
+      {{ cnt }},
+    {% endfor %}
+  ];
+  if (data.length < 2) return;
+
+  var w = rect.width, h = rect.height;
+  var pad = { top: 10, right: 10, bottom: 10, left: 10 };
+  var maxVal = Math.max.apply(null, data);
+  if (maxVal === 0) maxVal = 1;
+
+  var plotW = w - pad.left - pad.right;
+  var plotH = h - pad.top - pad.bottom;
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(201,168,76,0.1)';
+  ctx.lineWidth = 1;
+  for (var g = 0; g < 4; g++) {
+    var gy = pad.top + (plotH / 3) * g;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, gy);
+    ctx.lineTo(w - pad.right, gy);
+    ctx.stroke();
+  }
+
+  // Line
+  ctx.strokeStyle = '#c9a84c';
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (var i = 0; i < data.length; i++) {
+    var x = pad.left + (i / (data.length - 1)) * plotW;
+    var y = pad.top + plotH - (data[i] / maxVal) * plotH;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Fill under line
+  var lastX = pad.left + plotW;
+  var lastY = pad.top + plotH;
+  ctx.lineTo(lastX, lastY);
+  ctx.lineTo(pad.left, lastY);
+  ctx.closePath();
+  var grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
+  grad.addColorStop(0, 'rgba(201,168,76,0.2)');
+  grad.addColorStop(1, 'rgba(201,168,76,0.02)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Dots
+  for (var i = 0; i < data.length; i++) {
+    var x = pad.left + (i / (data.length - 1)) * plotW;
+    var y = pad.top + plotH - (data[i] / maxVal) * plotH;
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#c9a84c';
+    ctx.fill();
+  }
+})();
+</script>
 {% endblock %}

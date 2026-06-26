@@ -1,7 +1,17 @@
 {% extends "base.html" %}
 
+{% block seo %}
+  {% if hex_name %}
+  <meta property="og:title" content="{{ hex_name[lang] }} · {{ t.result_title }}">
+  <meta property="og:description" content="{{ summary_text[:200] }}">
+  <meta property="og:type" content="website">
+  <meta name="twitter:title" content="{{ hex_name[lang] }} · {{ t.result_title }}">
+  <meta name="twitter:description" content="{{ summary_text[:200] }}">
+  {% endif %}
+{% endblock %}
+
 {% block content %}
-<section class="card">
+<section class="card tilt-card">
   <h1 class="card-title">{{ t.result_title }}</h1>
 
   <p class="sub-info">
@@ -35,20 +45,19 @@
       <input type="hidden" name="lang" value="{{ lang }}">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn-secondary" style="font-size:18px;padding:8px 24px;">
-        {% if starred %}&#9733; {{ t.btn_unstar | default('取消收藏') }}{% else %}&#9734; {{ t.btn_star | default('收藏') }}{% endif %}
+        {% if starred %}&#9733; {{ t.btn_unstar }}{% else %}&#9734; {{ t.btn_star }}{% endif %}
       </button>
     </form>
   </div>
 
-  <!-- Back to home + Quick cast again -->
-  <div style="text-align:center;margin-bottom:20px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">
-    <a href="{{ url_for('index', lang=lang) }}" class="btn-primary" style="text-decoration:none;padding:10px 28px;border-radius:999px;font-size:13px;font-weight:600;">{{ t.btn_start | default('Start') }}</a>
-    <a href="{{ url_for('random_hex', lang=lang) }}" class="btn-secondary" style="text-decoration:none;padding:10px 24px;border-radius:999px;font-size:13px;font-weight:500;">{{ t.btn_random | default('Quick Cast') }}</a>
+  <!-- Back to home -->
+  <div style="text-align:center;margin-bottom:20px;">
+    <a href="{{ url_for('index', lang=lang) }}" class="btn-secondary" style="text-decoration:none;padding:10px 28px;border-radius:999px;font-size:13px;font-weight:500;">{{ t.nav_home }}</a>
   </div>
 
   <!-- ===== Original Hexagram ===== -->
   <div class="hex-section">
-    <h2 class="section-title">{{ t.original_hex | default('本卦') }}
+    <h2 class="section-title">{{ t.original_hex }}
       <span class="hex-name-inline">{{ hex_name[lang] }} &middot; {{ hex_meaning[lang] }}</span>
     </h2>
 
@@ -85,7 +94,7 @@
   <!-- ===== Changed Hexagram ===== -->
   {% if moving %}
   <div class="hex-section hex-section-changed">
-    <h2 class="section-title">{{ t.changed_hex | default('变卦') }}
+    <h2 class="section-title">{{ t.changed_hex }}
       <span class="hex-name-inline">{{ changed_name[lang] }} &middot; {{ changed_meaning[lang] }}</span>
     </h2>
 
@@ -123,7 +132,7 @@
   <!-- ===== Moving Lines Analysis ===== -->
   {% if moving_analysis.has_moving %}
   <div class="luck-block" style="background: rgba(212,168,67,0.05); border-left: 3px solid var(--gold); padding: 20px; margin: 20px 0; border-radius: 8px;">
-    <h3 class="luck-title" style="color: var(--gold);">{{ t.moving_title | default('动爻分析') }}</h3>
+    <h3 class="luck-title" style="color: var(--gold);">{{ t.moving_title }}</h3>
     <p style="margin-bottom: 12px; color: var(--text-secondary);">{{ moving_analysis.summary }}</p>
     {% for d in moving_analysis.details %}
       <div style="margin-bottom: 10px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 6px;">
@@ -138,7 +147,7 @@
   <!-- ===== Trend Analysis ===== -->
   {% if moving %}
   <div class="trend-card">
-    <h3 class="trend-title">{{ t.trend_title | default('变卦趋势') }}</h3>
+    <h3 class="trend-title">{{ t.trend_title }}</h3>
     <p>{{ trend_analysis[lang] }}</p>
   </div>
   {% endif %}
@@ -146,16 +155,16 @@
   <!-- ===== Fortune Comparison (本卦→变卦) ===== -->
   {% if fortune_comparison and fortune_comparison[lang] %}
   <div class="luck-block" style="background: rgba(180,130,255,0.05); border-left: 3px solid #b482ff; padding: 20px; margin: 20px 0; border-radius: 8px;">
-    <h3 class="luck-title" style="color: #b482ff;">{{ t.original_hex | default('本卦') }} → {{ t.changed_hex | default('变卦') }}</h3>
-    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 12px;">{{ t.comparison_desc | default('各运势从本卦到变卦的变化：') }}</p>
+    <h3 class="luck-title" style="color: #b482ff;">{{ t.original_hex }} → {{ t.changed_hex }}</h3>
+    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 12px;">{{ t.comparison_desc }}</p>
     {% for item in fortune_comparison[lang] %}
       <div style="margin-bottom: 12px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 6px;">
         <div style="font-weight: 600; color: #b482ff; margin-bottom: 4px;">{{ item.name }}</div>
         <div style="font-size: 13px; color: var(--text-secondary);">
-          <span style="color: var(--text-muted);">{{ t.label_original | default('本卦：') }}</span>{{ item.from_text }}
+          <span style="color: var(--text-muted);">{{ t.label_original }}</span>{{ item.from_text }}
         </div>
         <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">
-          <span style="color: #b482ff;">{{ t.label_changed | default('变卦：') }}</span>{{ item.to_text }}
+          <span style="color: #b482ff;">{{ t.label_changed }}</span>{{ item.to_text }}
         </div>
       </div>
     {% endfor %}
@@ -185,7 +194,7 @@
   <!-- Glossary for technical terms -->
   {% if glossary %}
   <div style="margin-top: 24px; padding: 16px 20px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: var(--radius-md);">
-    <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 10px;">{{ t.glossary_title | default('术语解释 / Glossary') }}</div>
+    <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 10px;">{{ t.glossary_title }}</div>
     {% for term, explanation in glossary.items() %}
       <div style="margin-bottom: 6px; font-size: 12.5px; line-height: 1.6;">
         <span style="color: var(--gold); font-weight: 500;">{{ term }}</span>
@@ -198,7 +207,7 @@
 
   <!-- Share Section -->
   <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border); text-align: center;">
-    <h3 style="font-family: var(--font-serif); font-size: 14px; color: var(--text-muted); margin-bottom: 12px;">{{ t.share_title | default('分享结果') }}</h3>
+    <h3 style="font-family: var(--font-serif); font-size: 14px; color: var(--text-muted); margin-bottom: 12px;">{{ t.share_title }}</h3>
     <div class="share-group">
       <a class="share-btn" href="https://twitter.com/intent/tweet?url={{ url_for('view', hid=hid, lang=lang, _external=True) }}&text={{ hex_name[lang] | e }} - {{ t.result_title | e }}" target="_blank" rel="noopener">
         <span class="share-icon">&#120143;</span> Twitter
@@ -213,13 +222,13 @@
         <span class="share-icon">f</span> Facebook
       </a>
       <button class="share-btn" onclick="copyShareText()">
-        <span class="share-icon">&#128203;</span> {{ t.btn_copy_share | default('复制分享文案') }}
+        <span class="share-icon">&#128203;</span> {{ t.btn_copy_share }}
       </button>
       <button class="share-btn" onclick="copyLink()">
-        <span class="share-icon">&#128279;</span> {{ t.btn_copy_link | default('复制链接') }}
+        <span class="share-icon">&#128279;</span> {{ t.btn_copy_link }}
       </button>
       <button class="share-btn" onclick="generateImage()">
-        <span class="share-icon">&#128247;</span> {{ t.btn_save_image | default('保存图片') }}
+        <span class="share-icon">&#128247;</span> {{ t.btn_save_image }}
       </button>
     </div>
     <div id="sharePreview" style="display:none; margin-top: 12px; padding: 12px 16px; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; color: var(--text-secondary); text-align: left; line-height: 1.6;"></div>
@@ -228,7 +237,7 @@
 </section>
 
 <script>
-var shareText = '{{ hex_name[lang] | e }} · {{ t.result_title | e }}\n{% if question %}{{ t.question_label | default("Question") }}: {{ question | e }}\n{% endif %}{{ t.share_hint | default("For reference only. Details:") }} ' + window.location.href;
+var shareText = '{{ hex_name[lang] | e }} · {{ t.result_title | e }}\n{% if question %}{{ t.question_label }}: {{ question | e }}\n{% endif %}{{ t.share_hint }} ' + window.location.href;
 
 function copyShareText() {
   if (navigator.clipboard) {
@@ -254,14 +263,14 @@ function copyLink() {
 function showShareDone() {
   var preview = document.getElementById('sharePreview');
   preview.style.display = 'block';
-  preview.textContent = '{{ t.copied_share | default("✓ 分享文案已复制到剪贴板") }}';
+  preview.textContent = '{{ t.copied_share }}';
   setTimeout(function() { preview.style.display = 'none'; }, 2000);
 }
 
 function showLinkDone() {
   var preview = document.getElementById('sharePreview');
   preview.style.display = 'block';
-  preview.textContent = '{{ t.copied_link | default("✓ 链接已复制到剪贴板") }}';
+  preview.textContent = '{{ t.copied_link }}';
   setTimeout(function() { preview.style.display = 'none'; }, 2000);
 }
 
@@ -270,6 +279,10 @@ function generateImage() {
   canvas.width = 750;
   canvas.height = 1100;
   var ctx = canvas.getContext('2d');
+
+  // Font stack that supports all languages
+  var fontSerif = '"Noto Serif SC", "Noto Sans JP", "Noto Sans KR", "Noto Sans Myanmar", serif';
+  var fontSans = '"Noto Sans SC", "Noto Sans JP", "Noto Sans KR", "Noto Sans Myanmar", "Noto Sans", sans-serif';
 
   // Background
   ctx.fillStyle = '#0e0e14';
@@ -280,39 +293,45 @@ function generateImage() {
   ctx.lineWidth = 2;
   ctx.strokeRect(20, 20, 710, 1060);
 
-  // Title
+  // Title (hexagram name)
   ctx.fillStyle = '#d4a843';
-  ctx.font = 'bold 36px serif';
+  ctx.font = 'bold 32px ' + fontSerif;
   ctx.textAlign = 'center';
-  ctx.fillText('{{ hex_name[lang] }}', 375, 80);
+  var hexTitle = '{{ hex_name[lang] | e }}';
+  ctx.fillText(hexTitle, 375, 75);
 
-  ctx.font = '18px sans-serif';
+  // Subtitle (hex number + result)
+  ctx.font = '16px ' + fontSans;
   ctx.fillStyle = '#9a9080';
-  ctx.fillText('{{ t.hex_prefix | e }}{{ hex_no }}{{ t.hex_suffix | e }} · {{ t.result_title }}', 375, 115);
+  ctx.fillText('{{ t.hex_prefix | e }}{{ hex_no }}{{ t.hex_suffix | e }} · {{ t.result_title | e }}', 375, 105);
 
   // Question
+  var yStart = 135;
   {% if question %}
-  ctx.font = '16px sans-serif';
+  ctx.font = '14px ' + fontSans;
   ctx.fillStyle = '#5e564a';
-  ctx.fillText('{{ t.question_label | default("Question") }}: {{ question | e }}', 375, 150);
+  var qText = '{{ t.question_label | e }}: {{ question | e }}';
+  wrapText(ctx, qText, 375, yStart, 600, 18);
+  yStart += Math.ceil(ctx.measureText(qText).width / 600) * 18 + 10;
   {% endif %}
 
   // Divider
   ctx.strokeStyle = 'rgba(212,168,67,0.3)';
   ctx.beginPath();
-  ctx.moveTo(100, 175);
-  ctx.lineTo(650, 175);
+  ctx.moveTo(100, yStart);
+  ctx.lineTo(650, yStart);
   ctx.stroke();
+  yStart += 20;
 
   // Summary
-  ctx.font = '15px sans-serif';
+  ctx.font = '14px ' + fontSans;
   ctx.fillStyle = '#d4a843';
   ctx.textAlign = 'center';
   var summary = '{{ summary_text | e }}';
-  wrapText(ctx, summary, 375, 210, 600, 22);
+  yStart = wrapText(ctx, summary, 375, yStart, 600, 20);
+  yStart += 20;
 
   // Five fortunes
-  var y = 320;
   var aspects = {{ analysis.keys() | list | tojson }};
   var titles = {
     {% for key, block in analysis.items() %}
@@ -321,29 +340,29 @@ function generateImage() {
   };
   var nowTexts = {
     {% for key, block in analysis.items() %}
-    '{{ key }}': '{{ block.now[lang][:80] | e }}',
+    '{{ key }}': '{{ block.now[lang][:60] | e }}',
     {% endfor %}
   };
 
-  for (var i = 0; i < aspects.length && y < 950; i++) {
+  for (var i = 0; i < aspects.length && yStart < 980; i++) {
     var asp = aspects[i];
     ctx.textAlign = 'left';
     ctx.fillStyle = '#d4a843';
-    ctx.font = 'bold 16px sans-serif';
-    ctx.fillText(titles[asp] || asp, 60, y);
-    y += 24;
+    ctx.font = 'bold 14px ' + fontSans;
+    ctx.fillText(titles[asp] || asp, 60, yStart);
+    yStart += 20;
 
     ctx.fillStyle = '#9a9080';
-    ctx.font = '14px sans-serif';
-    wrapTextLeft(ctx, nowTexts[asp] || '', 60, y, 630, 20);
-    y += Math.ceil((nowTexts[asp] || '').length / 40) * 20 + 20;
+    ctx.font = '13px ' + fontSans;
+    yStart = wrapTextLeft(ctx, nowTexts[asp] || '', 60, yStart, 630, 18);
+    yStart += 16;
   }
 
   // Footer
   ctx.fillStyle = '#5e564a';
-  ctx.font = '12px sans-serif';
+  ctx.font = '11px ' + fontSans;
   ctx.textAlign = 'center';
-  ctx.fillText('{{ t.app_title }} · {{ t.summary_notice | e }}', 375, 1060);
+  ctx.fillText('{{ t.app_title | e }} · {{ t.summary_notice | e }}', 375, 1060);
 
   // Download
   var link = document.createElement('a');
@@ -353,7 +372,7 @@ function generateImage() {
 
   var preview = document.getElementById('sharePreview');
   preview.style.display = 'block';
-  preview.textContent = '✓ {{ t.image_saved | default("图片已保存") }}';
+  preview.textContent = '✓ {{ t.image_saved }}';
   setTimeout(function() { preview.style.display = 'none'; }, 2000);
 }
 
@@ -372,6 +391,7 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     }
   }
   ctx.fillText(line, x, ly);
+  return ly + lineHeight;
 }
 
 function wrapTextLeft(ctx, text, x, y, maxWidth, lineHeight) {
@@ -390,6 +410,7 @@ function wrapTextLeft(ctx, text, x, y, maxWidth, lineHeight) {
     }
   }
   ctx.fillText(line, x, ly);
+  return ly + lineHeight;
 }
 </script>
 <canvas id="shareCanvas" style="display:none;"></canvas>

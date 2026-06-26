@@ -3,42 +3,47 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#d4a843">
+  <meta name="theme-color" content="#0c0a08">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="{{ t.app_title }}">
-  <meta name="description" content="{{ t.seo_description | default('Six Yao Divination - Ancient Chinese I Ching prediction method with 6 languages support') }}">
+  <meta name="description" content="{{ t.seo_description }}">
   <meta property="og:title" content="{{ t.app_title }}">
-  <meta property="og:description" content="{{ t.seo_description | default('Six Yao Divination - Ancient Chinese I Ching prediction method with 6 languages support') }}">
+  <meta property="og:description" content="{{ t.seo_description }}">
   <meta property="og:type" content="website">
   <meta property="og:image" content="{{ url_for('static', filename='gua/0.png', _external=True) }}">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="{{ t.app_title }}">
-  <meta name="twitter:description" content="{{ t.seo_description | default('Six Yao Divination - Ancient Chinese I Ching prediction method') }}">
+  <meta name="twitter:description" content="{{ t.seo_description }}">
+  {% block seo %}{% endblock %}
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='gua/0.png') }}">
   <title>{{ t.app_title }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-<header class="top-bar">
+<!-- 动效背景层 -->
+<canvas id="stars"></canvas>
+<div id="spotlight"></div>
+
+<header class="top-bar" id="topBar">
   <a href="{{ url_for('index', lang=lang) }}" class="logo">{{ t.app_title }}</a>
   <nav class="main-nav">
     <a href="{{ url_for('index', lang=lang) }}" class="nav-link">{{ t.nav_home }}</a>
     <a href="{{ url_for('history', lang=lang) }}" class="nav-link">{{ t.nav_history }}</a>
-    <a href="{{ url_for('starred', lang=lang) }}" class="nav-link">{{ t.nav_starred | default('Starred') }}</a>
-    <a href="{{ url_for('gallery', lang=lang) }}" class="nav-link">{{ t.nav_gallery | default('Atlas') }}</a>
-    <a href="{{ url_for('stats', lang=lang) }}" class="nav-link">{{ t.nav_stats | default('Stats') }}</a>
+    <a href="{{ url_for('starred', lang=lang) }}" class="nav-link">{{ t.nav_starred }}</a>
+    <a href="{{ url_for('gallery', lang=lang) }}" class="nav-link">{{ t.nav_gallery }}</a>
+    <a href="{{ url_for('stats', lang=lang) }}" class="nav-link">{{ t.nav_stats }}</a>
   </nav>
   <div class="lang-switch">
-    <button onclick="localStorage.removeItem('sy_lang');window.location.href='/'" title="{{ t.guide_title | default('教程') }}" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:14px;color:var(--text-muted);transition:all 0.2s ease;">?</button>
-    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="{{ t.theme_toggle | default('切换主题') }}" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:14px;color:var(--text-muted);transition:all 0.2s ease;">&#9790;</button>
-    <a href="{{ lang_urls['zh'] }}" class="lang-btn {% if lang == 'zh' %}active{% endif %}">中</a>
-    <a href="{{ lang_urls['ja'] }}" class="lang-btn {% if lang == 'ja' %}active{% endif %}">日</a>
-    <a href="{{ lang_urls['en'] }}" class="lang-btn {% if lang == 'en' %}active{% endif %}">EN</a>
-    <a href="{{ lang_urls['vi'] }}" class="lang-btn {% if lang == 'vi' %}active{% endif %}">VI</a>
-    <a href="{{ lang_urls['ko'] }}" class="lang-btn {% if lang == 'ko' %}active{% endif %}">한</a>
-    <a href="{{ lang_urls['my'] }}" class="lang-btn {% if lang == 'my' %}active{% endif %}">မြန်မာ</a>
+    <a href="{{ url_for('welcome_guide', lang=lang) }}" title="{{ t.guide_title }}" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:14px;color:var(--text-muted);text-decoration:none;display:inline-flex;align-items:center;justify-content:center;transition:all 0.2s ease;">?</a>
+    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="{{ t.theme_toggle }}" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:14px;color:var(--text-muted);transition:all 0.2s ease;">&#9790;</button>
+    <a href="{{ lang_urls['zh'] }}" class="lang-btn {% if lang == 'zh' %}active{% endif %}" onclick="localStorage.setItem('sy_lang','zh')">中</a>
+    <a href="{{ lang_urls['ja'] }}" class="lang-btn {% if lang == 'ja' %}active{% endif %}" onclick="localStorage.setItem('sy_lang','ja')">日</a>
+    <a href="{{ lang_urls['en'] }}" class="lang-btn {% if lang == 'en' %}active{% endif %}" onclick="localStorage.setItem('sy_lang','en')">EN</a>
+    <a href="{{ lang_urls['vi'] }}" class="lang-btn {% if lang == 'vi' %}active{% endif %}" onclick="localStorage.setItem('sy_lang','vi')">VI</a>
+    <a href="{{ lang_urls['ko'] }}" class="lang-btn {% if lang == 'ko' %}active{% endif %}" onclick="localStorage.setItem('sy_lang','ko')">한</a>
+    <a href="{{ lang_urls['my'] }}" class="lang-btn {% if lang == 'my' %}active{% endif %}" onclick="localStorage.setItem('sy_lang','my')">မြန်မာ</a>
   </div>
 </header>
 
@@ -47,19 +52,20 @@
 </main>
 
 <!-- WeChat / In-App Browser Warning -->
-<div id="wechatWarning" style="display:none;position:fixed;inset:0;background:rgba(8,8,12,0.95);z-index:99999;display:flex;align-items:center;justify-content:center;">
-  <div style="background:var(--bg-surface,#1a1a24);border:1px solid var(--border,#2a2a3a);border-radius:16px;padding:36px 28px;max-width:380px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+<div id="wechatWarning" style="display:none;position:fixed;inset:0;background:rgba(12,10,8,0.95);z-index:99999;align-items:center;justify-content:center;">
+  <div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:16px;padding:36px 28px;max-width:380px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
     <div style="font-size:48px;margin-bottom:16px;">&#x1F517;</div>
     <h2 id="wcTitle" style="font-family:var(--font-serif);font-size:20px;color:var(--text-primary);margin-bottom:12px;"></h2>
     <p id="wcDesc" style="font-size:14px;color:var(--text-secondary);line-height:1.7;margin-bottom:20px;"></p>
-    <div id="wcSteps" style="text-align:left;background:var(--bg-deep,#0e0e14);border-radius:10px;padding:16px;margin-bottom:20px;">
+    <div id="wcSteps" style="text-align:left;background:var(--bg-deep);border-radius:10px;padding:16px;margin-bottom:20px;">
       <div id="wcStep1" style="font-size:13px;color:var(--text-secondary);line-height:1.8;"></div>
     </div>
-    <button onclick="document.getElementById('wechatWarning').style.display='none'" id="wcClose" style="padding:10px 28px;border-radius:999px;border:none;background:var(--gold,#d4a843);color:var(--bg-deep,#0e0e14);font-size:14px;font-weight:600;cursor:pointer;"></button>
+    <button onclick="document.getElementById('wechatWarning').style.display='none'" id="wcClose" style="padding:10px 28px;border-radius:999px;border:none;background:var(--gold);color:var(--bg-deep);font-size:14px;font-weight:600;cursor:pointer;"></button>
   </div>
 </div>
-</body>
+
 <script>
+// ===== Theme =====
 (function() {
   var saved = localStorage.getItem('theme') || 'dark';
   if (saved === 'light') {
@@ -83,36 +89,193 @@ function toggleTheme() {
   }
 }
 </script>
+
 <script>
+// ===== Service Worker =====
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/static/sw.js').catch(function() {});
+  navigator.serviceWorker.register('{{ url_for("static", filename="sw.js") }}').catch(function() {});
 }
 </script>
+
 <script>
+// ===== WeChat Warning =====
 (function() {
   var ua = navigator.userAgent || '';
   var isWeChat = /MicroMessenger/i.test(ua);
   var isQQ = /QQ/i.test(ua) && !/MicroMessenger/i.test(ua);
   var isInApp = isWeChat || isQQ || /DingTalk|Weibo|Alipay|Douyin|TikTok/i.test(ua);
-
   if (!isInApp) return;
-
-  var lang = '{{ lang }}';
-  var texts = {
-    zh: { title: '请在浏览器中打开', desc: '当前在微信/QQ等应用内置浏览器中打开，部分功能可能受限。建议使用系统浏览器访问以获得完整体验。', step: '1. 点击右上角 <b>⋯</b> 按钮<br>2. 选择 <b>在浏览器中打开</b>', btn: '我知道了' },
-    ja: { title: 'ブラウザで開いてください', desc: '微信やQQなどのアプリ内ブラウザでは、一部の機能が制限される場合があります。システムブラウザで開くことをお勧めします。', step: '1. 右上の <b>⋯</b> ボタンをタップ<br>2. <b>ブラウザで開く</b> を選択', btn: '了解しました' },
-    en: { title: 'Open in Browser', desc: 'This page was opened in WeChat/QQ in-app browser. Some features may be limited. Please open in your system browser for the full experience.', step: '1. Tap the <b>⋯</b> button at the top right<br>2. Select <b>Open in Browser</b>', btn: 'Got it' },
-    vi: { title: 'Mở trong trình duyệt', desc: 'Trang này đang được mở trong trình duyệt tích hợp của WeChat/QQ. Một số tính năng có thể bị hạn chế. Hãy mở trong trình duyệt hệ thống để có trải nghiệm đầy đủ.', step: '1. Nhấn nút <b>⋯</b> ở góc trên bên phải<br>2. Chọn <b>Mở trong trình duyệt</b>', btn: 'Đã hiểu' },
-    ko: { title: '브라우저에서 열어주세요', desc: '微信/QQ 인앱 브라우저에서 열렸습니다. 일부 기능이 제한될 수 있습니다. 시스템 브라우저에서 열어주세요.', step: '1. 오른쪽 상단의 <b>⋯</b> 버튼을 누르세요<br>2. <b>브라우저에서 열기</b>를 선택하세요', btn: '알겠습니다' },
-    my: { title: 'ဘရောင်ဇာဖြင့် ဖွင့်ပါ', desc: 'WeChat/QQ အက်ပ်အတွင်း ဘရောင်ဇာဖြင့် ဖွင့်ထားပါသည်။ အင်္ဂါရပ်အချို့ ကန့်သတ်ထားနိုင်ပါသည်။ အပြည့်အဝအသုံးပြုရန် စနစ်ဘရောင်ဇာဖြင့် ဖွင့်ပါ။', step: '၁။ ညာဘက်အပေါ်ခြမ်းရှိ <b>⋯</b> ခလုတ်ကို နှိပ်ပါ<br>၂။ <b>ဘရောင်ဇာဖြင့် ဖွင့်ရန်</b> ကို ရွေးပါ', btn: 'နားလည်ပါပြီ' }
-  };
-  var t = texts[lang] || texts.en;
-
-  document.getElementById('wcTitle').textContent = t.title;
-  document.getElementById('wcDesc').textContent = t.desc;
-  document.getElementById('wcStep1').innerHTML = t.step;
-  document.getElementById('wcClose').textContent = t.btn;
+  document.getElementById('wcTitle').textContent = '{{ t.wechat_title }}';
+  document.getElementById('wcDesc').textContent = '{{ t.wechat_desc }}';
+  document.getElementById('wcStep1').innerHTML = '{{ t.wechat_step }}';
+  document.getElementById('wcClose').textContent = '{{ t.wechat_btn }}';
   document.getElementById('wechatWarning').style.display = 'flex';
 })();
 </script>
+
+<script>
+// ===== Scroll to Top =====
+window.addEventListener('DOMContentLoaded', function() {
+  if (history && history.scrollRestoration) { history.scrollRestoration = 'manual'; }
+  window.scrollTo(0, 0);
+});
+window.addEventListener('pageshow', function(e) {
+  if (e.persisted) { window.scrollTo(0, 0); }
+});
+</script>
+
+<script>
+// ===== ① 鼠标跟随光晕 Spotlight =====
+(function() {
+  var el = document.getElementById('spotlight');
+  if (!el) return;
+  document.addEventListener('mousemove', function(e) {
+    el.style.setProperty('--mx', e.clientX + 'px');
+    el.style.setProperty('--my', e.clientY + 'px');
+  });
+})();
+</script>
+
+<script>
+// ===== ② 粒子星空背景 =====
+(function() {
+  var canvas = document.getElementById('stars');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var particles = [];
+  var count = 120;
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  for (var i = 0; i < count; i++) {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      r: Math.random() * 1.5 + 0.3,
+      speed: Math.random() * 0.0008 + 0.0003,
+      phase: Math.random() * Math.PI * 2,
+      gold: Math.random() > 0.7
+    });
+  }
+
+  function draw(time) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      var alpha = 0.3 + 0.5 * Math.sin(time * p.speed + p.phase);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      if (p.gold) {
+        ctx.fillStyle = 'rgba(201,168,76,' + alpha + ')';
+      } else {
+        ctx.fillStyle = 'rgba(232,220,200,' + alpha + ')';
+      }
+      ctx.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+})();
+</script>
+
+<script>
+// ===== ③ 滚动淡入 Intersection Observer =====
+(function() {
+  var targets = document.querySelectorAll('.card, h1, h2, .section-title, .luck-block, .trend-card, .daily-card, .gallery-item');
+  targets.forEach(function(el) { el.classList.add('fade-in'); });
+
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  targets.forEach(function(el) { observer.observe(el); });
+})();
+</script>
+
+<script>
+// ===== ④ 卡片 3D 倾斜（边缘缓冲版） =====
+(function() {
+  if (window.matchMedia('(max-width: 480px)').matches) return;
+  var cards = document.querySelectorAll('.tilt-card');
+  cards.forEach(function(card) {
+    var currentX = 0, currentY = 0, currentS = 1;
+    var targetX = 0, targetY = 0, targetS = 1;
+    var animating = false;
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function animate() {
+      currentX = lerp(currentX, targetX, 0.15);
+      currentY = lerp(currentY, targetY, 0.15);
+      currentS = lerp(currentS, targetS, 0.15);
+      if (Math.abs(currentX - targetX) < 0.01 && Math.abs(currentY - targetY) < 0.01 && Math.abs(currentS - targetS) < 0.001) {
+        currentX = targetX;
+        currentY = targetY;
+        currentS = targetS;
+      }
+      card.style.transform = 'perspective(800px) rotateX(' + currentX + 'deg) rotateY(' + currentY + 'deg) scale(' + currentS + ')';
+      if (animating) requestAnimationFrame(animate);
+    }
+
+    card.addEventListener('mousemove', function(e) {
+      var rect = card.getBoundingClientRect();
+      var x = (e.clientX - rect.left) / rect.width;
+      var y = (e.clientY - rect.top) / rect.height;
+      // 边缘缓冲：离中心越远，倾斜越小
+      var edgeX = 1 - Math.pow(Math.abs(x - 0.5) * 2, 2);
+      var edgeY = 1 - Math.pow(Math.abs(y - 0.5) * 2, 2);
+      var damp = Math.min(edgeX, edgeY);
+      targetX = (y - 0.5) * -1.5 * damp;
+      targetY = (x - 0.5) * 1.5 * damp;
+      targetS = 1.02;
+      if (!animating) {
+        animating = true;
+        animate();
+      }
+    });
+
+    card.addEventListener('mouseleave', function() {
+      targetX = 0;
+      targetY = 0;
+      targetS = 1;
+    });
+  });
+})();
+</script>
+
+<script>
+// ===== ⑤ 打字机效果 =====
+(function() {
+  var hero = document.querySelector('.hero-title');
+  if (!hero) return;
+  var text = hero.textContent.trim();
+  hero.textContent = '';
+  var cursor = document.createElement('span');
+  cursor.className = 'cursor';
+  hero.appendChild(cursor);
+  var i = 0;
+  function type() {
+    if (i < text.length) {
+      hero.insertBefore(document.createTextNode(text.charAt(i)), cursor);
+      i++;
+      setTimeout(type, 80);
+    } else {
+      setTimeout(function() { cursor.style.display = 'none'; }, 2000);
+    }
+  }
+  setTimeout(type, 500);
+})();
+</script>
+
+</body>
 </html>

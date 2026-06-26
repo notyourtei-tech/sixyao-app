@@ -8,7 +8,7 @@
     <div class="coin">爻</div>
     <div class="coin-shadow"></div>
   </div>
-  <div class="coin-toss-text">{{ t.coin_tossing | default('起卦中…') }}</div>
+  <div class="coin-toss-text">{{ t.coin_tossing }}</div>
 </div>
 
 <!-- Daily Fortune Card -->
@@ -20,27 +20,27 @@
       <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">{{ daily.date }}</div>
     </div>
     <div class="daily-info" style="flex:1;min-width:0;">
-      <div style="font-size:10px;color:var(--gold);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;">{{ t.daily_label | default('今日一签') }}</div>
+      <div style="font-size:10px;color:var(--gold);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;">{{ t.daily_label }}</div>
       <div class="daily-title" style="font-family:var(--font-serif);font-size:16px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">
-        {{ daily.title[lang] }} · {{ t.hex_prefix | default('第') }}{{ daily.hex_no }}{{ t.hex_suffix | default('卦') }}
+        {{ daily.title[lang] }} · {{ t.hex_prefix }}{{ daily.hex_no }}{{ t.hex_suffix }}
       </div>
       <div class="daily-desc" style="font-size:12px;color:var(--text-secondary);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
         {{ daily.desc[lang] }}
       </div>
     </div>
     <a href="{{ url_for('random_hex', lang=lang) }}" style="flex-shrink:0;text-decoration:none;">
-      <button class="btn-primary" style="font-size:11px;padding:7px 16px;">{{ t.btn_quick_cast | default('我也来一卦') }}</button>
+      <button class="btn-primary" style="font-size:11px;padding:7px 16px;">{{ t.btn_quick_cast }}</button>
     </a>
   </div>
 </div>
 {% endif %}
 
-<section class="card">
+<section class="card tilt-card">
   <div class="hero-section">
     <div class="hero-hex">&#x2642;</div>
     <h1 class="hero-title">{{ t.app_title }}</h1>
     <div class="hero-divider"></div>
-    <p class="hero-subtitle">I Ching &middot; Six Lines</p>
+    <p class="hero-subtitle">{{ t.app_title }}</p>
   </div>
 
   <form method="post" action="{{ url_for('result', lang=lang) }}" class="form">
@@ -48,31 +48,31 @@
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
     <div class="form-row">
-      <label class="form-label">{{ t.category_label | default('问题类型') }}</label>
+      <label class="form-label">{{ t.category_label }}</label>
       <div class="radio-group">
         <label>
           <input type="radio" name="category" value="general" checked>
-          {{ t.cat_general | default('综合运势') }}
+          {{ t.cat_general }}
         </label>
         <label>
           <input type="radio" name="category" value="love">
-          {{ t.cat_love | default('感情') }}
+          {{ t.cat_love }}
         </label>
         <label>
           <input type="radio" name="category" value="career">
-          {{ t.cat_career | default('事业') }}
+          {{ t.cat_career }}
         </label>
         <label>
           <input type="radio" name="category" value="wealth">
-          {{ t.cat_wealth | default('财运') }}
+          {{ t.cat_wealth }}
         </label>
         <label>
           <input type="radio" name="category" value="health">
-          {{ t.cat_health | default('健康') }}
+          {{ t.cat_health }}
         </label>
         <label>
           <input type="radio" name="category" value="people">
-          {{ t.cat_people | default('人际') }}
+          {{ t.cat_people }}
         </label>
       </div>
     </div>
@@ -97,7 +97,7 @@
 
     <div class="form-row form-row-number" id="numberRow">
       <label class="form-label">{{ t.method_number }}</label>
-      <input type="text" name="number" class="text-input" placeholder="{{ t.number_placeholder }}">
+      <input type="number" inputmode="numeric" name="number" class="text-input" placeholder="{{ t.number_placeholder }}" min="0" max="999">
     </div>
 
     <div class="form-row">
@@ -108,12 +108,12 @@
 
     <div class="form-row form-row-center">
       <button type="submit" class="btn-primary">{{ t.btn_start }}</button>
-      <a href="{{ url_for('random_hex', lang=lang) }}" class="btn-secondary" style="text-decoration:none;display:inline-block;margin-left:12px;">{{ t.btn_random | default('随机一卦') }}</a>
+      <a href="{{ url_for('random_hex', lang=lang) }}" class="btn-secondary" style="text-decoration:none;display:inline-block;margin-left:12px;">{{ t.btn_random }}</a>
     </div>
   </form>
   <div style="text-align:center;margin-top:24px;">
-    <button class="btn-secondary" onclick="toggleReminder()" id="reminderBtn" style="font-size:12px;padding:8px 20px;">
-      &#128276; {{ t.btn_reminder | default('开启每日提醒') }}
+    <button class="btn-secondary" id="reminderBtn" style="font-size:12px;padding:8px 20px;">
+      &#128276; {{ t.btn_reminder }}
     </button>
   </div>
 </section>
@@ -141,6 +141,12 @@
         overlay.classList.add('active');
         playCoinSound();
       });
+    }
+
+    // Reminder button
+    var reminderBtn = document.getElementById('reminderBtn');
+    if (reminderBtn) {
+      reminderBtn.addEventListener('click', toggleReminder);
     }
 
     function playCoinSound() {
@@ -180,18 +186,18 @@
     }
     function toggleReminder() {
       if (!('Notification' in window)) {
-        alert('{{ t.reminder_not_supported | default("您的浏览器不支持通知功能") }}');
+        alert('{{ t.reminder_not_supported }}');
         return;
       }
       if (Notification.permission === 'granted') {
         var enabled = localStorage.getItem('reminder_enabled');
         if (enabled) {
           localStorage.removeItem('reminder_enabled');
-          document.getElementById('reminderBtn').innerHTML = '&#128276; {{ t.btn_reminder | default("开启每日提醒") }}';
+          document.getElementById('reminderBtn').innerHTML = '&#128276; {{ t.btn_reminder }}';
         } else {
           localStorage.setItem('reminder_enabled', '1');
           localStorage.setItem('reminder_time', '09:00');
-          document.getElementById('reminderBtn').innerHTML = '&#128276; {{ t.btn_reminder_off | default("关闭每日提醒") }}';
+          document.getElementById('reminderBtn').innerHTML = '&#128276; {{ t.btn_reminder_off }}';
           scheduleReminder();
         }
       } else {
@@ -199,10 +205,10 @@
           if (perm === 'granted') {
             localStorage.setItem('reminder_enabled', '1');
             localStorage.setItem('reminder_time', '09:00');
-            document.getElementById('reminderBtn').innerHTML = '&#128276; {{ t.btn_reminder_off | default("关闭每日提醒") }}';
+            document.getElementById('reminderBtn').innerHTML = '&#128276; {{ t.btn_reminder_off }}';
             scheduleReminder();
           }
-        });
+        }).catch(function() {});
       }
     }
 
@@ -215,9 +221,9 @@
       var delay = target - now;
       setTimeout(function() {
         if (localStorage.getItem('reminder_enabled') && Notification.permission === 'granted') {
-          new Notification('{{ t.reminder_title | default("六爻占卜") }}', {
-            body: '{{ t.reminder_body | default("今天还没有占卜哦，来看看今日运势吧！") }}',
-            icon: '/static/gua/0.png'
+          new Notification('{{ t.reminder_title }}', {
+            body: '{{ t.reminder_body }}',
+            icon: '{{ url_for("static", filename="gua/0.png") }}'
           });
         }
         scheduleReminder();
@@ -226,7 +232,7 @@
 
     // Restore reminder state
     if (localStorage.getItem('reminder_enabled')) {
-      document.getElementById('reminderBtn').innerHTML = '&#128276; {{ t.btn_reminder_off | default("关闭每日提醒") }}';
+      document.getElementById('reminderBtn').innerHTML = '&#128276; {{ t.btn_reminder_off }}';
       scheduleReminder();
     }
   })();
